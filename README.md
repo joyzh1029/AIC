@@ -14,11 +14,7 @@
 ## 기술 스택
 
 ### 백엔드
-- Node.js
-- Express.js
-- MongoDB
-- WebSocket
-- RESTful API
+- FastAPI
 
 ### 프론트엔드
 - React 18
@@ -32,13 +28,7 @@
 
 ```
 AIC/
-├── backend/               # 백엔드 애플리케이션
-│   ├── src/               # 소스 파일
-│   │   ├── controllers/   # 컨트롤러
-│   │   ├── models/        # 데이터 모델
-│   │   ├── routes/        # API 라우트
-│   │   └── config/        # 설정 파일
-│   └── package.json       # 백엔드 의존성
+├── backend/               # 백엔드 애플리케이션│  
 ├── frontend/              # 프론트엔드 애플리케이션
 │   ├── public/            # 정적 파일
 │   ├── src/               # 소스 파일
