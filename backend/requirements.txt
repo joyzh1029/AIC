@@ -1,0 +1,31 @@
+# Web frameworks and servers
+fastapi==0.104.1
+uvicorn==0.23.2
+python-multipart==0.0.6
+
+# Data validation and environment variables
+pydantic>=1.10.8,<2.0.0
+pydantic-core<2.0.0
+python-dotenv==1.0.0
+
+# Data processing
+pandas==2.2.3
+pyarrow==15.0.2
+pytz==2023.3
+
+# AI and LLM related
+langchain==0.1.10
+langchain-google-genai>=0.0.3
+crewai==0.28.0
+google-generativeai>=0.3.0
+
+# Authentication and security
+python-jose==3.3.0
+passlib==1.7.4
+bcrypt==4.0.1
+
+# Other tools
+python-dateutil>=2.8.2
+
+onnxruntime>=1.17.0
+chromadb>=0.4.0,<0.5.0
