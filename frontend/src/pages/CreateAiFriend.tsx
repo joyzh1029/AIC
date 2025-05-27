@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 
+=======
+import { useUser } from "@/contexts/UserContext";
+import { useEffect } from "react";
+>>>>>>> origin/taesu-feature
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -15,8 +20,20 @@ const CreateAiFriend = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedCharacter, setSelectedCharacter] = useState<number | null>(null);
   const [name, setName] = useState("");
+<<<<<<< HEAD
   const navigate = useNavigate();
 
+=======
+  const { user } = useUser();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      navigate("/signup");
+    }
+  }, [user, navigate]);
+
+>>>>>>> origin/taesu-feature
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
