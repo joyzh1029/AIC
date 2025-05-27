@@ -13,6 +13,10 @@
 └── voice_emotion_module.py  # (예정) 목소리 톤 기반 감정 분석
 ```
 
+![image](https://github.com/user-attachments/assets/b43efbe8-e342-499e-a893-46f0c8bafde2)
+![image](https://github.com/user-attachments/assets/b2b10885-9623-449b-a02c-5fd1750d71b7)
+![image](https://github.com/user-attachments/assets/57454aff-7b3d-43c9-8c6c-43a7be87b932)
+
 ## 🔧 주요 기능
 - 얼굴 분석 (SmolVLM 기반)
 - 음성 텍스트 분석 (Whisper)
@@ -25,5 +29,10 @@
 얼굴 표정 세부 파악
 모델 : https://huggingface.co/ElenaRyumina/face_emotion_recognition <--- 테스트까지 완료!
 ![image](https://github.com/user-attachments/assets/a9930cd2-89c5-42c2-8f52-bee889d98fdf)
+
+- FastVLM 모델 사용 보류
+- 하드웨어 성능 부족
+  ![image](https://github.com/user-attachments/assets/ff23cfdf-2d7f-4965-866e-61c8053e50a1)
+
 
 
