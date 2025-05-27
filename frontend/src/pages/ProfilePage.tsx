@@ -77,7 +77,7 @@ const Profile = () => {
 
         {/* Bottom Navigation */}
         <nav className="py-2 grid grid-cols-3 border-t bg-white">
-          <Link to="/" className="flex flex-col items-center justify-center">
+          <Link to="/signup" className="flex flex-col items-center justify-center">
             <Home className="h-6 w-6 text-gray-400" />
             <span className="text-[11px] text-gray-400 mt-1">홈</span>
           </Link>

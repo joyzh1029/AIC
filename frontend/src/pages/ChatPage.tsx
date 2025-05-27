@@ -3,7 +3,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Link } from "react-router-dom";
-import { MessageCircle, Image as ImageIcon, Heart, User, Send, Phone, Settings, Mic, Camera } from "lucide-react";
+import { Home, Image as ImageIcon, Heart, User, Send, Phone, Settings, Mic, Camera } from "lucide-react";
 
 interface Message {
   id: string;
@@ -84,9 +84,11 @@ const ChatPage = () => {
           <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
             <Phone className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-            <Settings className="h-5 w-5" />
-          </Button>
+          <Link to="/settings">
+            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
+              <Settings className="h-5 w-5" />
+            </Button>
+          </Link>
         </div>
       </header>
 
@@ -161,9 +163,9 @@ const ChatPage = () => {
 
       {/* Bottom Navigation */}
       <nav className="py-2 grid grid-cols-4 border-t bg-white">
-        <Link to="/" className="flex flex-col items-center justify-center">
-          <MessageCircle className="h-6 w-6 text-blue-500" />
-          <span className="text-[11px] text-blue-500 mt-1">채팅</span>
+        <Link to="/signup" className="flex flex-col items-center justify-center">
+          <Home className="h-6 w-6 text-blue-500" />
+          <span className="text-[11px] text-blue-500 mt-1">홈</span>
         </Link>
         <button className="flex flex-col items-center justify-center">
           <ImageIcon className="h-6 w-6 text-gray-400" />
