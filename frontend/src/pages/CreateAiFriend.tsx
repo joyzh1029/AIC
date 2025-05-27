@@ -1,4 +1,5 @@
-
+import { useUser } from "@/contexts/UserContext";
+import { useEffect } from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -15,7 +16,14 @@ const CreateAiFriend = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedCharacter, setSelectedCharacter] = useState<number | null>(null);
   const [name, setName] = useState("");
+  const { user } = useUser();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      navigate("/signup");
+    }
+  }, [user, navigate]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
