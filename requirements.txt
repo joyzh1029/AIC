@@ -1,0 +1,12 @@
+transformers
+accelerate
+decord
+opencv-python
+torch
+torchvision
+num2words
+hf_xet
+sounddevice
+openai-whisper --upgrade
+google-generativeai
+dotenv
