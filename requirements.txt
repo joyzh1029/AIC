@@ -10,3 +10,6 @@ sounddevice
 openai-whisper --upgrade
 google-generativeai
 dotenv
+fer
+moviepy
+tensorflow
