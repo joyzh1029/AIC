@@ -53,6 +53,7 @@ cd AIC
 ```bash
 cd frontend
 npm install
+npm install axios
 ```
 
 3. 개발 서버 실행
@@ -72,4 +73,5 @@ npm run dev
 
 ---
 
-
+4. FastAPI 서버 실행
+uvicorn main:app --reload --port 8181
