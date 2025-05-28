@@ -36,23 +36,24 @@ export default function Header() {
   };
 
   return (
-    <header className="w-full flex justify-end items-center p-4 bg-white shadow">
-      {user ? (
-        <div className="flex items-center space-x-2">
-          <img
-            src={user.photoURL || "/default_profile.png"}
-            alt="profile"
-            className="w-8 h-8 rounded-full border"
-          />
-          <span className="text-sm">{user.displayName || user.email}</span>
-          <button
-            onClick={handleLogout}
-            className="ml-2 px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
-          >
-            로그아웃
-          </button>
-        </div>
-      ) : null}
-    </header>
+    <header className="fixed top-0 left-0 w-full h-16 flex justify-end items-center px-4 bg-white shadow box-border overflow-hidden z-50">
+    {user && (
+      <div className="flex items-center space-x-2">
+        <img
+          src={user.photoURL || "/default_profile.png"}
+          alt="profile"
+          className="w-8 h-8 rounded-full border"
+        />
+        <span className="text-sm truncate max-w-[120px]">{user.displayName || user.email}</span>
+        <button
+          onClick={handleLogout}
+          className="ml-2 px-3 py-0.5 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+          style={{ lineHeight: "1.5rem", height: "2rem" }}
+        >
+          로그아웃
+        </button>
+      </div>
+    )}
+  </header>
   );
 }

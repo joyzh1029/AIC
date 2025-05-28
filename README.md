@@ -53,6 +53,7 @@ cd AIC
 ```bash
 cd frontend
 npm install
+npm install axios
 ```
 
 3. 개발 서버 실행
