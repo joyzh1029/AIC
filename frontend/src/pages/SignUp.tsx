@@ -6,17 +6,22 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
+<<<<<<< HEAD
+=======
 import { auth, googleProvider } from "@/firebase";
 import { signInWithPopup } from "firebase/auth";
 import { useUser } from "@/contexts/UserContext";
 import { deleteUser } from "firebase/auth";
 
+>>>>>>> origin/taesu-feature
 const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
 
+<<<<<<< HEAD
+=======
   const { user, setUser } = useUser();
   // 구글 로그인 함수
   const handleGoogleLogin = async () => {
@@ -57,6 +62,7 @@ const SignUp = () => {
     }
   };
   
+>>>>>>> origin/taesu-feature
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Login attempted with:", { email, password, rememberMe });
@@ -164,7 +170,11 @@ const SignUp = () => {
             <div className="text-center text-gray-500 text-sm">
               <span>간편 로그인</span>
               <div className="mt-4 flex justify-center space-x-4">
+<<<<<<< HEAD
+                <button className="w-12 h-12 flex items-center justify-center rounded-lg border border-gray-300 hover:border-gray-400 p-2">
+=======
                 <button className="w-12 h-12 flex items-center justify-center rounded-lg border border-gray-300 hover:border-gray-400 p-2" onClick={handleGoogleLogin}>
+>>>>>>> origin/taesu-feature
                   <img src="/Google__G__logo.svg.png" alt="Google" className="w-full h-full object-contain" />
                 </button>
                 <button className="w-12 h-12 flex items-center justify-center rounded-lg border border-gray-300 hover:border-gray-400 p-2">
