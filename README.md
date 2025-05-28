@@ -73,4 +73,5 @@ npm run dev
 
 ---
 
-
+4. FastAPI 서버 실행
+uvicorn main:app --reload --port 8181
