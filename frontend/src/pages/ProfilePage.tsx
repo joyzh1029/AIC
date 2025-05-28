@@ -1,8 +1,9 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Sun, MessageCircle, Home, Settings, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Profile = () => {
+  const navigate = useNavigate();
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Left Sidebar */}
@@ -18,7 +19,12 @@ const Profile = () => {
             <Heart className="h-5 w-5 text-pink-500 fill-pink-500" />
             <h1 className="text-lg font-medium">My AI Chingu</h1>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 hover:bg-gray-100"
+            onClick={() => navigate('/settings')}
+          >
             <Settings className="h-5 w-5" />
           </Button>
         </header>
