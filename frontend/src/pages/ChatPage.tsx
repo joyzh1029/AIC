@@ -131,46 +131,48 @@ const ChatPage = () => {
                     </div>
                   )}
                 </div>
-                <span className="text-[11px] text-gray-500 mt-1 mx-1">
-                  {message.time}
-                  <button
-                    className="ml-1 p-1 hover:bg-gray-200 rounded-full"
-                    onClick={async () => {
-                      try {
-                        // Send TTS request to backend
-                        const response = await fetch('http://localhost:8181/api/tts', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify({ text: message.text })
-                        });
+                    <span className="text-[11px] text-gray-500 mt-1 mx-1">
+                    {message.time}
+                    {message.sender === "ai" && (
+                      <button
+                        className="ml-1 p-1 hover:bg-gray-200 rounded-full"
+                        onClick={async () => {
+                          try {
+                            // Send TTS request to backend
+                            const response = await fetch('http://localhost:8181/api/tts', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({ text: message.text })
+                            });
 
-                        if (!response.ok) {
-                          throw new Error('음성 변환 요청 실패');
-                        }
+                            if (!response.ok) {
+                              throw new Error('음성 변환 요청 실패');
+                            }
 
-                        // Create and play audio
-                        const audioBlob = await response.blob();
-                        const audioUrl = URL.createObjectURL(audioBlob);
-                        const audio = new Audio(audioUrl);
-                        
-                        // Cleanup after playback
-                        audio.onended = () => {
-                          URL.revokeObjectURL(audioUrl);
-                        };
+                            // Create and play audio
+                            const audioBlob = await response.blob();
+                            const audioUrl = URL.createObjectURL(audioBlob);
+                            const audio = new Audio(audioUrl);
 
-                        await audio.play();
-                      } catch (error) {
-                        console.error('음성 재생 실패:', error);
-                      }
-                    }}
-                    aria-label="음성 듣기"
-                    tabIndex={0}
-                  >
-                    <Volume2 className="h-4 w-4 text-gray-500" />
-                  </button>
-                </span>
+                            // Cleanup after playback
+                            audio.onended = () => {
+                              URL.revokeObjectURL(audioUrl);
+                            };
+
+                            await audio.play();
+                          } catch (error) {
+                            console.error('음성 재생 실패:', error);
+                          }
+                        }}
+                        aria-label="음성 듣기"
+                        tabIndex={0}
+                      >
+                        <Volume2 className="h-4 w-4 text-gray-500" />
+                      </button>
+                    )}
+                  </span>
                 </div>
             </div>
           ))}
