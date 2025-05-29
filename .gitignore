@@ -1,0 +1,73 @@
+# ====================
+# 프로젝트 루트 레벨 .gitignore
+# ====================
+
+# 환경 변수 파일들
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*
+
+# API 키 및 시크릿 파일들
+*.key
+*.pem
+secrets.json
+config.json
+credentials.json
+
+# IDE 및 에디터 설정 파일들
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 시스템 파일들
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# 임시 파일들
+*.tmp
+*.temp
+*.log
+*.cache
+
+# 압축 파일들
+*.zip
+*.tar.gz
+*.rar
+
+# 문서화 임시 파일들
+*.docx~
+*.xlsx~
+*.pptx~
+
+# 백업 파일들
+*.bak
+*.backup
+*.old
+
+# 개발 중 테스트 파일들
+test_*
+temp_*
+scratch.*
+playground.*
+
+# 프로젝트별 제외 파일들
+uploads/
+downloads/
+data/
+logs/
+
+# ====================
+# 주의: backend/와 frontend/ 폴더의 
+# 개별 .gitignore 파일들도 함께 작동합니다
+# ====================
