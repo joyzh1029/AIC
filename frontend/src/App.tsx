@@ -12,6 +12,7 @@ import CreateAiFriend from "./pages/CreateAiFriend";
 import ChatPage from "./pages/ChatPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
+import VoiceChat from "./pages/VoiceChat.tsx"; 
 import { UserProvider } from "@/contexts/UserContext";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => {
                 <Route path="/signup" element={<SignUp />} />
                 <Route path="/create-ai-friend" element={<CreateAiFriend />} />
                 <Route path="/chat" element={<ChatPage />} />
+                <Route path="/chat/voicechat" element={<VoiceChat />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
