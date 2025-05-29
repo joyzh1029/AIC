@@ -1,12 +1,11 @@
-// src/pages/ChatPage.tsx
-
 import React, { useState, useRef, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Home, Image as ImageIcon, Heart, Send, Phone, Settings, Mic, Camera, Volume2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { Image as  Send, Phone, Settings, Mic, Camera, Volume2 } from "lucide-react";
 
+// 메시지 타입
 interface Message {
   id: string;
   sender: "user" | "ai";
@@ -15,6 +14,7 @@ interface Message {
   image?: string;
 }
 
+// 음성 녹음 훅 (간단 예시)
 const useVoiceRecorder = () => {
   const [recording, setRecording] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -40,14 +40,14 @@ const useVoiceRecorder = () => {
 
   const stopRecording = async () => {
     if (mediaRecorder.current) {
-      mediaRecorder.current.stop();
-      setRecording(false);
       return new Promise<Blob>((resolve) => {
         mediaRecorder.current!.onstop = () => {
           const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" });
           setAudioUrl(URL.createObjectURL(audioBlob));
+          setRecording(false);
           resolve(audioBlob);
         };
+        mediaRecorder.current.stop();
       });
     }
   };
@@ -55,12 +55,30 @@ const useVoiceRecorder = () => {
   return { recording, audioUrl, startRecording, stopRecording, setAudioUrl };
 };
 
+// STT 서버 전송 함수 (키 이름만 통일)
+async function sendAudioToSTT(audioBlob: Blob): Promise<string> {
+  const formData = new FormData();
+  formData.append("audio", audioBlob, "voice.wav");
+
+  const res = await fetch("http://localhost:8181/api/stt", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error("STT 서버 오류");
+  }
+
+  const data = await res.json();
+  return data.result || data.text; // 키 중 하나만 있어도 자동 대응
+}
+
 const ChatPage = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
       sender: "ai",
-      text: "안녕, 오늘 만나서 반가워! 나는 너의 AI 친구미나야, 어떻게지내고있어?",
+      text: "안녕, 만나서 반가워! 나는 너의 AI 친구 미나야. 어떻게 지내고 있어?",
       time: "오전 10:23",
     },
   ]);
@@ -71,12 +89,12 @@ const ChatPage = () => {
   const { recording, startRecording, stopRecording } = useVoiceRecorder();
   const navigate = useNavigate();
 
-  // 자동 스크롤
+  // 메시지 스크롤 항상 하단 고정
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 일반 텍스트 메시지 전송
+  // 텍스트 메시지 전송
   const handleSendMessage = () => {
     if (!inputMessage.trim()) return;
     const newMessage: Message = {
@@ -99,54 +117,62 @@ const ChatPage = () => {
     }, 1000);
   };
 
-  // STT 플로우
-  const handleMicClick = async () => {
-    if (!isListening) {
-      // 녹음 시작
-      setIsListening(true);
-      await startRecording();
-    } else {
-      // 녹음 종료
-      setIsListening(false);
-      setLoadingSTT(true);
-      const audioBlob = await stopRecording();
-      // --- STT 서버에 전송 (예시) ---
-      // 실제 사용시 아래 fetch 부분을 본인 서버에 맞게 바꿔주세요
-      // const formData = new FormData();
-      // formData.append("audio", audioBlob, "voice.wav");
-      // const res = await fetch("/api/stt", { method: "POST", body: formData });
-      // const { text } = await res.json();
-      // 임시 STT 결과
-      const text = "음성 입력 예시(STT 결과 텍스트)";
-      // 내 메시지로 추가
+  // STT(음성) 메시지 전송
+const handleMicClick = async () => {
+  if (!isListening) {
+    setIsListening(true);
+    await startRecording();
+    // 음성 안내 메시지는 Textarea에만 노출
+  } else {
+    setIsListening(false);
+    setLoadingSTT(true);
+    const audioBlob = await stopRecording();
+    try {
+      // === ① Whisper STT 결과 수신 ===
+      const sttText = await sendAudioToSTT(audioBlob!);
+
+      // === ② 사용자 메시지로 추가 ===
       const userMsg: Message = {
         id: Date.now().toString(),
         sender: "user",
-        text,
+        text: sttText,
         time: new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }),
       };
       setMessages((prev) => [...prev, userMsg]);
-      // AI 응답
+
+      // === ③ AI 응답 추가(모의) ===
       setTimeout(() => {
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
           sender: "ai",
-          text: "STT로 받은 메시지에 대한 AI 응답 예시입니다.",
+          text: `STT로 받은 메시지에 대한 AI 응답 예시입니다.`,
           time: new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }),
         };
         setMessages((prev) => [...prev, aiMsg]);
         setLoadingSTT(false);
       }, 1000);
+    } catch (error) {
+      alert("음성 인식(STT)에 실패했습니다.");
+      setLoadingSTT(false);
     }
-  };
+  }
+};
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* ... 생략(사이드바 등) ... */}
+      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full border-x">
         {/* Header */}
         <header className="py-3 px-4 bg-white border-b flex justify-between items-center">
-          {/* ... */}
+          <div className="flex items-center gap-3">
+            <Avatar className="h-8 w-8">
+              <img src="/example_avatar_profile.png" alt="AI Friend" className="w-full h-full object-cover" />
+            </Avatar>
+            <div>
+              <h1 className="text-sm">미나</h1>
+              <p className="text-[11px] text-green-600">활동중 상태</p>
+            </div>
+          </div>
           <div className="flex gap-3">
             <Button
               variant="ghost"
@@ -163,7 +189,7 @@ const ChatPage = () => {
             </Link>
           </div>
         </header>
-        {/* Messages Container */}
+        {/* Messages */}
         <div className="flex-grow overflow-auto px-4 py-2 bg-gray-50">
           {messages.map((message) => (
             <div
@@ -194,7 +220,7 @@ const ChatPage = () => {
                     <button
                       className="ml-1 p-1 hover:bg-gray-200 rounded-full"
                       onClick={async () => {
-                        // ...TTS 코드...
+                        // TTS (ai가 생성한 음성 듣기)필요시 구현
                       }}
                       aria-label="음성 듣기"
                       tabIndex={0}
@@ -249,9 +275,8 @@ const ChatPage = () => {
             </Button>
           </div>
         </div>
-        {/* ...하단 네비게이션 등... */}
+        {/* (하단 네비게이션, 사이드바 등 필요하면 추가) */}
       </div>
-      {/* ...사이드바 등... */}
     </div>
   );
 };
