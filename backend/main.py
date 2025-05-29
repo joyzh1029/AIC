@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Query, UploadFile, File
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi import FastAPI, Query, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import shutil
@@ -94,6 +94,21 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "message": "Service is running"}
+
+@app.get("/tts/{filename}")
+async def get_tts_audio(filename: str):
+    # TTS 오디오 파일 경로
+    tts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "TTS", "tts_audio")
+    audio_path = os.path.join(tts_dir, filename)
+    
+    # 파일 존재 여부 확인
+    if not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail=f"오디오 파일을 찾을 수 없습니다: {filename}")
+    
+    # 파일 확장자에 따른 media_type 설정
+    media_type = "audio/mpeg" if filename.endswith(".mp3") else "audio/wav"
+    
+    return FileResponse(audio_path, media_type=media_type, filename=filename)
 
 @app.post("/wanna-image/")
 async def upload_image(image: UploadFile = File(...)):
