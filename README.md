@@ -15,6 +15,7 @@
 
 ### 백엔드
 - FastAPI
+- TTS (Text-to-Speech)
 
 ### 프론트엔드
 - React 18
@@ -28,39 +29,59 @@
 
 ```
 AIC/
-├── backend/               # 백엔드 애플리케이션│  
-├── frontend/              # 프론트엔드 애플리케이션
-│   ├── public/            # 정적 파일
-│   ├── src/               # 소스 파일
-│   │   ├── components/    # 재사용 가능 컴포넌트
-│   │   ├── pages/        # 페이지 컴포넌트
-│   │   ├── styles/       # 글로벌 스타일
-│   │   └── App.tsx       # 메인 애플리케이션 컴포넌트
-│   ├── package.json      # 프론트엔드 의존성
-│   └── vite.config.ts    # Vite 설정 파일
-└── README.md             # 프로젝트 문서
+├── backend/                # 백엔드 애플리케이션
+│   └── TTS/                # TTS 서비스
+│       ├── tts.py          # FastAPI TTS 서버
+│       └── tts_audio/      # 오디오 파일 저장소
+│           └── example.mp3 # 음성 재생 테스트용 샘플 파일
+├── frontend/               # 프론트엔드 애플리케이션
+│   ├── public/             # 정적 파일
+│   ├── src/                # 소스 파일
+│   │   ├── components/     # 재사용 가능 컴포넌트
+│   │   ├── pages/          # 페이지 컴포넌트
+│   │   ├── styles/         # 글로벌 스타일
+│   │   └── App.tsx         # 메인 애플리케이션 컴포넌트
+│   ├── package.json        # 프론트엔드 의존성
+│   └── vite.config.ts      # Vite 설정 파일
+└── README.md               # 프로젝트 문서
 ```
 
 ## 시작하기
 
-1. 저장소 복제
+사전 요구사항
+
+- Node.js (v18 이상)
+- Python (v3.8 이상)
+- npm 또는 yarn
+
+### 1. 저장소 복제
 ```bash
 git clone https://github.com/joyzh1029/AIC.git
 cd AIC
 ```
 
-2. 프론트엔드 의존성 설치
+### 2. 백엔드 설정 및 실행
+```bash
+cd backend
+pip install fastapi uvicorn python-multipart
+
+# TTS 서버가 실행 중이어야 음성 출력 가능
+# 현재는 예제 오디오 파일(example.mp3) 재생
+cd TTS
+python -m uvicorn tts:app --host 0.0.0.0 --port 8181 --reload
+```
+
+### 3. 프론트엔드 설정 및 실행
 ```bash
 cd frontend
 npm install
-```
-
-3. 개발 서버 실행
-```bash
 npm run dev
 ```
 
-애플리케이션은 `http://localhost:8080`에서 확인 가능
+### 4. 애플리케이션 접속
+- 프론트엔드: http://localhost:8080
+- 백엔드 TTS API: http://localhost:8181
+- 백엔드 상태 확인: http://localhost:8181/health
 
 ## 개발 중인 기능
 
