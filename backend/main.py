@@ -25,6 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -85,6 +86,14 @@ def get_image(prompt_id):
     ws.close()
     return None
 
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to AIC API", "endpoints": ["/health", "/wanna-image/"]}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "message": "Service is running"}
 
 @app.post("/wanna-image/")
 async def upload_image(image: UploadFile = File(...)):
