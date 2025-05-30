@@ -18,23 +18,18 @@ def load_smol_vlm():
     ).to(DEVICE)
     return processor, model, DEVICE
 
-def analyze_face_emotion(image: Image.Image, processor, model, device) -> str:
-    # 장면/상황에 대한 설명을 요청하는 멀티모달 프롬프트 구성
-    messages = [{
-        "role": "user",
-        "content": [
-            {"type": "image"},
-            {"type": "text", "text": "Summerize the atmosphere and what is happening in the scene."}
-        ]
-    }]
-    prompt = processor.apply_chat_template(messages, add_generation_prompt=True)
+def summarize_scene(image: Image.Image, processor, model, device) -> str:
+    # VLM 입력용 프롬프트: 반드시 <image> 토큰 포함해야 함
+    prompt = "<image> Summarize the atmosphere and what is happening in the scene."
 
-    # 이미지 + 텍스트 프롬프트를 모델 입력으로 변환
-    inputs = processor(text=prompt, images=[image], return_tensors="pt").to(device)
+    inputs = processor(
+        text=prompt,
+        images=[image],
+        return_tensors="pt"
+    ).to(device)
 
-    # 결과 생성
-    ids = model.generate(**inputs, max_new_tokens=500)
+    ids = model.generate(**inputs, max_new_tokens=300)
     text = processor.batch_decode(ids, skip_special_tokens=True)
 
-    # 텍스트 요약 결과 반환
-    return text[0].strip()
+    return text[0].strip() if text else "No scene description detected."
+

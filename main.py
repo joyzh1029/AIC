@@ -5,10 +5,9 @@ from collections import deque
 from queue import Queue
 
 from core.webcam import capture_webcam_image
-from core.vlm import load_smol_vlm, analyze_face_emotion
+from core.vlm import load_smol_vlm, summarize_scene
 from core.stt import load_whisper_model, transcribe_stream
 from core.fer_emotion import analyze_facial_expression
-from core.emotion import synthesize_emotion
 from core.llm import configure_gemini, generate_response
 from utils.summary import most_common_emotion, print_emotion_summary
 from PIL import Image
@@ -47,13 +46,13 @@ def webcam_thread():
     cap.release()
     cv2.destroyAllWindows()
 
-def synthesize_emotion_3way(face, text_emotion, voice_tone_emotion):
+def synthesize_emotion_3way(face, voice_tone_emotion):
     if face != "neutral":
         return face
     elif voice_tone_emotion != "neutral":
         return voice_tone_emotion
     else:
-        return text_emotion
+        return "neutral"
 
 def analyze_loop(vlm_model, processor, device, whisper_model):
     while running_event.is_set():
@@ -65,22 +64,21 @@ def analyze_loop(vlm_model, processor, device, whisper_model):
                 # 얼굴 감정 분석
                 face_emotion = analyze_facial_expression(image)
 
-                # 음성에서 텍스트, 텍스트 감정, 목소리 톤 감정 추출
-                text, text_emotion, voice_tone_emotion = transcribe_stream(whisper_model)
+                # 음성에서 텍스트 및 목소리 톤 감정 추출
+                text, voice_tone_emotion = transcribe_stream(whisper_model)
 
                 # SmolVLM으로 배경/장면 인식
-                scene_context = analyze_face_emotion(image, processor, vlm_model, device)
+                scene_context = summarize_scene(image, processor, vlm_model, device)
 
                 # 로그 저장
                 emotion_logs.append({
                     "face": face_emotion,
                     "text": text,
-                    "text_emotion": text_emotion,
                     "voice_emotion": voice_tone_emotion,
                     "scene": scene_context
                 })
 
-                print(f"[표정 감정] {face_emotion} / [텍스트 감정] {text_emotion} / [목소리톤 감정] {voice_tone_emotion}")
+                print(f"[표정 감정] {face_emotion} / [목소리톤 감정] {voice_tone_emotion}")
                 print(f"[사용자 발화] {text}")
                 print(f"[현재 장면 요약] {scene_context}")
 
@@ -92,27 +90,31 @@ def analyze_loop(vlm_model, processor, device, whisper_model):
     if emotion_logs:
         all_faces = [e["face"] for e in emotion_logs]
         all_texts = " ".join([e["text"] for e in emotion_logs])
-        all_text_emotions = [e["text_emotion"] for e in emotion_logs]
         all_voice_emotions = [e["voice_emotion"] for e in emotion_logs]
         last_scene = emotion_logs[-1]["scene"]
 
         final_face = most_common_emotion(all_faces)
-        final_text_emotion = most_common_emotion(all_text_emotions)
         final_voice_emotion = most_common_emotion(all_voice_emotions)
 
-        final_emotion = synthesize_emotion_3way(final_face, final_text_emotion, final_voice_emotion)
+        final_emotion = synthesize_emotion_3way(final_face, final_voice_emotion)
 
         context = {
             "weather": "맑음",
             "sleep": "7시간",
             "stress": "중간",
             "location_scene": last_scene,
-            "emotion_history": [final_face, final_text_emotion, final_voice_emotion]
+            "emotion_history": [final_face, final_voice_emotion]
         }
 
         print_emotion_summary(emotion_logs)
 
-        response = generate_response(final_emotion, all_texts, context)
+        response = generate_response(
+            final_face,
+            final_voice_emotion,
+            last_scene,
+            all_texts,
+            context
+        )
         print("\n🧠 Gemini 응답:")
         print(response)
     else:
