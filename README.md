@@ -16,6 +16,7 @@
 ### 백엔드
 - FastAPI
 - TTS (Text-to-Speech)
+- OpenAI Whisper
 
 ### 프론트엔드
 - React 18
@@ -43,15 +44,17 @@ AIC/
 │   │   └── App.tsx         # 메인 애플리케이션 컴포넌트
 │   ├── package.json        # 프론트엔드 의존성
 │   └── vite.config.ts      # Vite 설정 파일
+├── requirements.txt        # Python 패키지 의존성
 └── README.md               # 프로젝트 문서
 ```
 
 ## 시작하기
 
-사전 요구사항
-
+### 사전 요구사항
 - Node.js (v18 이상)
 - Python (v3.8 이상)
+- CUDA 11.8 (GPU 사용 시)
+- 가상환경 권장
 - npm 또는 yarn
 
 ### 1. 저장소 복제
@@ -60,7 +63,19 @@ git clone https://github.com/joyzh1029/AIC.git
 cd AIC
 ```
 
-### 2. 백엔드 설정 및 실행
+### 2. CUDA 호환 PyTorch 설치
+```bash
+# 가상환경 생성 및 활성화 후
+pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu118
+
+# Python 패키지 설치
+pip install -r requirements.txt
+
+# fer 패키지 별도 설치 (의존성 체크 없이)
+pip install fer==22.5.1 --no-deps
+```
+
+### 3. 백엔드 설정 및 실행
 ```bash
 cd backend
 pip install fastapi uvicorn python-multipart
@@ -71,26 +86,33 @@ cd TTS
 python -m uvicorn tts:app --host 0.0.0.0 --port 8181 --reload
 ```
 
-### 3. 프론트엔드 설정 및 실행
+### 4. 프론트엔드 설정 및 실행
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### 4. 애플리케이션 접속
+### 5. 애플리케이션 접속
 - 프론트엔드: http://localhost:8080
 - 백엔드 TTS API: http://localhost:8181
 - 백엔드 상태 확인: http://localhost:8181/health
 
-## 개발 중인 기능
 
+## 설치 확인
+```bash
+python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
+```
+
+
+## 주의사항 
+fer 패키지는 PyTorch 2.7.0과 직접 호환되지 않아 --no-deps 옵션으로 설치</br>
+이는 임시조치로, 추후 얼굴 표정 인식 라이브러리 교체 예정
+
+
+## 개발 중인 기능
 - [ ] 음성 채팅 통합
 - [ ] 이미지 인식 기능
 - [ ] 향상된 AI 상호작용
 - [ ] 모바일 애플리케이션
 - [ ] 사용자 인증 시스템
-
----
-
-
