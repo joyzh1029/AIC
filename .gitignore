@@ -1,0 +1,40 @@
+# 1. Python 캐시 및 빌드 파일
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.pyo
+
+# 2. 환경 설정
+.env
+*.env
+
+# 3. IDE 관련 (VSCode, PyCharm 등)
+.vscode/
+.idea/
+
+# 4. OS 관련 파일
+.DS_Store
+Thumbs.db
+
+# 5. FAISS 벡터 저장소 (저장 위치에 따라 수정)
+news_index/
+*.faiss
+*.json
+*.pkl
+
+# 6. 로그 및 실행 중 생성 파일
+*.log
+*.tmp
+.cache/
+*.sqlite
+*.db
+
+# 7. 모델 관련 임시 파일
+*.pt
+*.ckpt
+*.h5
+
+# 8. 생성된 결과물 (배포용 또는 테스트 생성물)
+*.zip
+*.png
