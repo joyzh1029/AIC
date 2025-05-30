@@ -16,31 +16,6 @@
 
 ---
 
-## 📁 디렉토리 구조
-
-```
-news_agent/
-├── main.py              # CLI 실행 파일
-├── server.py            # FastAPI API 서버
-├── config.py            # 환경변수 로드
-├── constants.py         # 상수 정의
-│
-├── modules/
-│   ├── gnews_client.py  # 뉴스 수집
-│   ├── cache.py         # 캐싱 로직
-│   ├── news.py          # 문서 포맷 + 카테고리 감지
-│   └── vector.py        # 벡터 생성
-│
-├── llm/
-│   └── gemini.py        # Gemini API 호출
-│
-├── .env                 # API 키 설정
-├── .gitignore
-└── README.md
-```
-
----
-
 ## ⚙️ 실행 방법
 
 ### ✅ 1. 환경 설정
