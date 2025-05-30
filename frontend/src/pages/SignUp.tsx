@@ -6,12 +6,57 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
+import { auth, googleProvider } from "@/firebase";
+import { signInWithPopup } from "firebase/auth";
+import { useUser } from "@/contexts/UserContext";
+import { deleteUser } from "firebase/auth";
+
 const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
 
+  const { user, setUser } = useUser();
+  // 구글 로그인 함수
+  const handleGoogleLogin = async () => {
+    if (user) {
+      alert("이미 로그인되어 있습니다.");
+      return;
+    }
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      setUser(result.user);
+      navigate('/create-ai-friend');
+    } catch (error) {
+      alert("구글 로그인 실패: " + error);
+    }
+  };
+
+  // 계정 삭제 함수
+  const handleDeleteAccount = async () => {
+    if (!user) {
+      alert("로그인 후 이용 가능합니다.");
+      return;
+    }
+    if (!window.confirm("정말로 계정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+      return;
+    }
+    try {
+      await deleteUser(user);
+      setUser(null);
+      alert("계정이 삭제되었습니다.");
+      navigate("/");
+    } catch (error: any) {
+      // 재로그인 필요 에러 처리
+      if (error.code === "auth/requires-recent-login") {
+        alert("보안을 위해 다시 로그인 후 계정 삭제가 가능합니다. 로그아웃 후 다시 로그인 해주세요.");
+      } else {
+        alert("계정 삭제 실패: " + error.message);
+      }
+    }
+  };
+  
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Login attempted with:", { email, password, rememberMe });
@@ -119,7 +164,7 @@ const SignUp = () => {
             <div className="text-center text-gray-500 text-sm">
               <span>간편 로그인</span>
               <div className="mt-4 flex justify-center space-x-4">
-                <button className="w-12 h-12 flex items-center justify-center rounded-lg border border-gray-300 hover:border-gray-400 p-2">
+                <button className="w-12 h-12 flex items-center justify-center rounded-lg border border-gray-300 hover:border-gray-400 p-2" onClick={handleGoogleLogin}>
                   <img src="/Google__G__logo.svg.png" alt="Google" className="w-full h-full object-contain" />
                 </button>
                 <button className="w-12 h-12 flex items-center justify-center rounded-lg border border-gray-300 hover:border-gray-400 p-2">
