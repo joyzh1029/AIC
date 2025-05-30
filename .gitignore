@@ -1,73 +1,63 @@
-# ====================
-# 프로젝트 루트 레벨 .gitignore
-# ====================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# 환경 변수 파일들
-.env
-.env.local
-.env.development
-.env.test
-.env.production
-.env.*
+# Virtual environment
+venv/
+.env/
+.venv/
+env/
+ENV/
 
-# API 키 및 시크릿 파일들
-*.key
-*.pem
-secrets.json
-config.json
-credentials.json
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
 
-# IDE 및 에디터 설정 파일들
+# IDEs and editors
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
+*.sublime-project
+*.sublime-workspace
 
-# 시스템 파일들
+# OS-specific files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-desktop.ini
 
-# 임시 파일들
-*.tmp
-*.temp
+# Log files
 *.log
-*.cache
 
-# 압축 파일들
-*.zip
-*.tar.gz
-*.rar
+# Python package files
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
 
-# 문서화 임시 파일들
-*.docx~
-*.xlsx~
-*.pptx~
+# PyInstaller
+*.spec
 
-# 백업 파일들
-*.bak
-*.backup
-*.old
+# dotenv
+.env
 
-# 개발 중 테스트 파일들
-test_*
-temp_*
-scratch.*
-playground.*
+# mypy
+.mypy_cache/
 
-# 프로젝트별 제외 파일들
-uploads/
-downloads/
-data/
-logs/
+# pytest
+.cache/
+.pytest_cache/
 
-# ====================
-# 주의: backend/와 frontend/ 폴더의 
-# 개별 .gitignore 파일들도 함께 작동합니다
-# ====================
+# coverage
+htmlcov/
+.coverage
+.coverage.*
+
+# test result
+nosetests.xml
+test_*.xml
+coverage.xml
+
+# docker
+*.pid
+
+# VSCode settings
+.vscode/
