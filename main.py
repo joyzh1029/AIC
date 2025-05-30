@@ -4,7 +4,6 @@ import time
 from collections import deque
 from queue import Queue
 
-from core.webcam import capture_webcam_image
 from core.vlm import load_smol_vlm, summarize_scene
 from core.stt import load_whisper_model, transcribe_stream
 from core.fer_emotion import analyze_facial_expression

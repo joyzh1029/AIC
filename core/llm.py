@@ -22,7 +22,7 @@ def generate_response(face_emotion, voice_emotion, scene, user_text, context, mo
         f"사용자는 현재 이런 상태야:\n"
         f"- 표정 감정: '{face_emotion}'\n"
         f"- 목소리 감정: '{voice_emotion}'\n"
-        f"- 현재 상황: {scene}\n"
+        f"- 주변 환경은 다음과 같아: '{scene}'\n"
         f"발화 내용: \"{user_text}\"\n\n"
         f"날씨: {context.get('weather', '알 수 없음')}\n"
         f"수면 시간: {context.get('sleep', '알 수 없음')}\n"
