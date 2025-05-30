@@ -19,17 +19,31 @@ def load_smol_vlm():
     return processor, model, DEVICE
 
 def summarize_scene(image: Image.Image, processor, model, device) -> str:
-    # VLM 입력용 프롬프트: 반드시 <image> 토큰 포함해야 함
-    prompt = "<image> Summarize the atmosphere and what is happening in the scene."
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": "Describe the situation in a short sentence, no more than 15 words."}
+            ]
+        }
+    ]
 
+    # 1. Chat 템플릿을 텍스트 prompt로 생성
+    prompt = processor.apply_chat_template(
+        messages,
+        add_generation_prompt=True
+    )
+
+    # 2. prompt와 image를 processor로 encode (여기서만 images 전달)
     inputs = processor(
         text=prompt,
         images=[image],
         return_tensors="pt"
     ).to(device)
 
-    ids = model.generate(**inputs, max_new_tokens=300)
-    text = processor.batch_decode(ids, skip_special_tokens=True)
+    # 3. 모델 생성
+    ids = model.generate(**inputs, max_new_tokens=100)
+    decoded = processor.batch_decode(ids, skip_special_tokens=True)
 
-    return text[0].strip() if text else "No scene description detected."
-
+    return decoded[0].strip() if decoded else "No scene description detected."
