@@ -1,11 +1,11 @@
-import os
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+# backend/TTS/tts.py
+
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# CORS (생략 가능)
+# CORS (프론트엔드 개발 환경에서 접근 허용)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,16 +14,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 현재 tts.py의 경로
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# tts_audio/example.mp3의 절대 경로 이후 api연결시엔 이 코드를 변경해야 함
-AUDIO_PATH = os.path.join(BASE_DIR, "tts_audio", "example.mp3")
-
-@app.post("/api/tts")
-def get_example_audio():
-    # 파일 존재 여부 확인 (없으면 404)
-    if not os.path.exists(AUDIO_PATH):
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="오디오 파일을 찾을 수 없습니다.")
-    return FileResponse(AUDIO_PATH, media_type="audio/mp3", filename="example.mp3")
+@app.post("/api/stt")
+async def transcribe(audio: UploadFile = File(...)):
+    # 여기에 Whisper 등 음성인식 처리 코드 작성
+    # 임시 예시:
+    contents = await audio.read()
+    # 실제로는 파일 저장 후 처리
+    return {"result": "여기에 음성 인식 결과"}
