@@ -1,24 +1,56 @@
-# core/fer_emotion.py
-# FER 라이브러리를 활용한 얼굴 표정 감정 분석 모듈
-
-import cv2
-from fer import FER
-from PIL import Image
+import torch
 import numpy as np
+from PIL import Image
+from torchvision import transforms
+from core.resnet_lstm import ResNet50, LSTMPyTorch
 
-# FER 감정 추론기 초기화 (MTCNN 얼굴 검출기 포함)
-detector = FER(mtcnn=True)
+DICT_EMO = {0: 'Neutral', 1: 'Happiness', 2: 'Sadness', 3: 'Surprise', 4: 'Fear', 5: 'Disgust', 6: 'Anger'}
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# 모델 로드
+pth_backbone_model = ResNet50().to(device)
+pth_backbone_model.load_state_dict(torch.load('model/FER_static_ResNet50_AffectNet.pt', map_location=device))
+pth_backbone_model.eval()
+
+pth_LSTM_model = LSTMPyTorch().to(device)
+pth_LSTM_model.load_state_dict(torch.load('model/FER_dinamic_LSTM_Aff-Wild2.pt', map_location=device))
+pth_LSTM_model.eval()
+
+# 전처리
+class PreprocessInput(torch.nn.Module):
+    def forward(self, x):
+        x = x.to(torch.float32)
+        x = torch.flip(x, dims=(0,))
+        x[0, :, :] -= 91.4953
+        x[1, :, :] -= 103.8827
+        x[2, :, :] -= 131.0912
+        return x
+
+transform = transforms.Compose([
+    transforms.PILToTensor(),
+    PreprocessInput()
+])
+
+lstm_features = []
 
 def analyze_facial_expression(image: Image.Image) -> str:
-    # PIL 이미지를 OpenCV 형식으로 변환 (BGR)
-    frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+    global lstm_features
+    image = image.resize((224, 224), Image.Resampling.NEAREST)
+    input_tensor = transform(image).unsqueeze(0).to(device)
 
-    # 가장 강하게 감지된 감정을 추출 (최상위 하나만)
-    top_emotion = detector.top_emotion(frame)
+    with torch.no_grad():
+        features = torch.relu(pth_backbone_model.extract_features(input_tensor)).cpu().numpy()
 
-    if top_emotion:
-        emotion, score = top_emotion
-        return emotion  # 예: "happy", "sad"
+    if not lstm_features:
+        lstm_features = [features] * 10
     else:
-        return "neutral"  # 감정이 감지되지 않으면 중립 반환
+        lstm_features = lstm_features[1:] + [features]
 
+    lstm_input = torch.from_numpy(np.vstack(lstm_features)).unsqueeze(0).to(device)
+
+    with torch.no_grad():
+        output = pth_LSTM_model(lstm_input).cpu().numpy()
+
+    pred = np.argmax(output)
+    return DICT_EMO[pred]

@@ -17,7 +17,7 @@ def load_whisper_model(model_size="base"):
 
     if device == "cuda":
         print("⚡ GPU(FP16) 모드로 Whisper 실행")
-        model = model.half().to("cuda")  # 확실하게 GPU로 이동
+        model = model.to("cuda")
     else:
         print("🖥️ CPU(FP32) 모드로 Whisper 실행")
 
