@@ -52,7 +52,7 @@ AIC/
 
 ### 사전 요구사항
 - Node.js (v18 이상)
-- Python (v3.8 이상)
+- Python (v3.10)
 - CUDA 11.8 (GPU 사용 시)
 - 가상환경 권장
 - npm 또는 yarn
