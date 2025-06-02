@@ -1,0 +1,5 @@
+openai
+numpy
+requests
+python-dotenv
+tavily-python
