@@ -65,20 +65,23 @@ cd AIC
 
 ### 2. CUDA 호환 PyTorch 설치
 ```bash
-# 가상환경 생성 및 활성화 후
-pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu118
 
-# Python 패키지 설치
-pip install -r requirements.txt
+# 가상환경 생성 및 활성화 후 Python 패키지 설치
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu118
+# 기본적으로 PyPI에서 패키지를 찾고, 없는 경우 'https://download.pytorch.org/whl/cu118' 경로에서 찾겠다는 의미(extra index)
 
 # fer 패키지 별도 설치 (의존성 체크 없이)
 pip install fer==22.5.1 --no-deps
+# pip freeze 명령어로 requirements.txt 파일 생성 시, fer 패키지는 제외할 것
 ```
 
 ### 3. 백엔드 설정 및 실행
 ```bash
 cd backend
 pip install fastapi uvicorn python-multipart
+
+# 재훈님 작업물 테스트 (루트 디렉토리에서 실행)
+python -m backend.main
 
 # TTS 서버가 실행 중이어야 음성 출력 가능
 # 현재는 예제 오디오 파일(example.mp3) 재생

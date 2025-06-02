@@ -6,8 +6,8 @@ import sounddevice as sd
 import soundfile as sf
 import tempfile
 
-from core.emotion import extract_emotion_from_text
-from core.ser_emotion import analyze_voice_emotion_korean as analyze_voice_emotion
+from backend.app.emotion.emotion import extract_emotion_from_text
+from backend.app.emotion.ser_emotion import analyze_voice_emotion_korean as analyze_voice_emotion
 
 def load_whisper_model(model_size="base"):
     # Whisper 모델 로딩 (기본: base 모델)

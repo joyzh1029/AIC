@@ -4,13 +4,13 @@ import time
 from collections import deque
 from queue import Queue
 
-from core.webcam import capture_webcam_image
-from core.vlm import load_smol_vlm, analyze_face_emotion
-from core.stt import load_whisper_model, transcribe_stream
-from core.fer_emotion import analyze_facial_expression
-from core.emotion import synthesize_emotion
-from core.llm import configure_gemini, generate_response
-from utils.summary import most_common_emotion, print_emotion_summary
+from backend.app.vision.webcam import capture_webcam_image
+from backend.app.multimodal.vlm import load_smol_vlm, analyze_face_emotion
+from backend.app.audio.stt import load_whisper_model, transcribe_stream
+from backend.app.vision.fer_emotion import analyze_facial_expression
+from backend.app.emotion.emotion import synthesize_emotion
+from backend.app.nlp.llm import configure_gemini, generate_response
+from backend.app.emotion.summary import most_common_emotion, print_emotion_summary
 from PIL import Image
 
 # 실행 상태 및 큐 초기화
