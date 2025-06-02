@@ -67,7 +67,7 @@ cd AIC
 ```bash
 
 # 가상환경 생성 및 활성화 후 Python 패키지 설치
-pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu118
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 # 기본적으로 PyPI에서 패키지를 찾고, 없는 경우 'https://download.pytorch.org/whl/cu118' 경로에서 찾겠다는 의미(extra index)
 
 # fer 패키지 별도 설치 (의존성 체크 없이)
