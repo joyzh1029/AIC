@@ -1,17 +1,43 @@
 import cv2
 import threading
 import time
+import base64
+import io
+import json
+import numpy as np
+import os
+import sys
 from collections import deque
 from queue import Queue
 
-from backend.app.vision.webcam import capture_webcam_image
-from backend.app.multimodal.vlm import load_smol_vlm, analyze_face_emotion
-from backend.app.audio.stt import load_whisper_model, transcribe_stream
-from backend.app.vision.fer_emotion import analyze_facial_expression
-from backend.app.emotion.emotion import synthesize_emotion
-from backend.app.nlp.llm import configure_gemini, generate_response
-from backend.app.emotion.summary import most_common_emotion, print_emotion_summary
+# 현재 디렉토리를 Python 경로에 추가 (상대 경로 임포트를 위함)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from fastapi import FastAPI, Request, File, UploadFile, Form
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+# 상대 경로로 임포트 변경
+from app.vision.webcam import capture_webcam_image
+from app.multimodal.vlm import load_smol_vlm, analyze_face_emotion
+from app.audio.stt import load_whisper_model, transcribe_stream
+from app.vision.fer_emotion import analyze_facial_expression
+from app.emotion.emotion import synthesize_emotion
+from app.nlp.llm import configure_gemini, generate_response
+from app.emotion.summary import most_common_emotion, print_emotion_summary
 from PIL import Image
+
+# FastAPI 앱 초기화
+app = FastAPI()
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 실행 상태 및 큐 초기화
 running_event = threading.Event()
@@ -118,18 +144,83 @@ def analyze_loop(vlm_model, processor, device, whisper_model):
     else:
         print("❗ 분석된 감정 로그가 없습니다.")
 
+# 카메라 캡처 API 엔드포인트
+@app.post("/api/camera/capture")
+async def capture_image(request: Request):
+    try:
+        # 요청 본문에서 이미지 데이터 가져오기
+        data = await request.json()
+        image_data = data.get("image", "")
+        
+        # base64 디코딩
+        if image_data.startswith("data:image"):
+            # data:image/jpeg;base64, 같은 접두사 제거
+            image_data = image_data.split(",")[1]
+        
+        image_bytes = base64.b64decode(image_data)
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        # 이미지 분석 처리
+        face_emotion = analyze_facial_expression(image)
+        
+        # 이미지를 분석 큐에 추가 (백그라운드 분석용)
+        frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        if not analysis_queue.full():
+            analysis_queue.put(frame)
+        
+        # 응답 반환
+        return JSONResponse(content={
+            "success": True,
+            "emotion": face_emotion,
+            "message": "이미지가 성공적으로 분석되었습니다."
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": f"이미지 처리 중 오류 발생: {str(e)}"})
+
+# FastAPI 앱 실행 (uvicorn에서 실행할 때 사용)
+@app.on_event("startup")
+def startup_event():
+    # 모델 로딩
+    global processor, vlm_model, device, whisper_model
+    print("🔧 모델 로딩 중...")
+    processor, vlm_model, device = load_smol_vlm()
+    whisper_model = load_whisper_model()
+    configure_gemini()
+    
+    # 분석 스레드 시작
+    global analyzer
+    analyzer = threading.Thread(target=analyze_loop, args=(vlm_model, processor, device, whisper_model))
+    analyzer.daemon = True
+    analyzer.start()
+
+@app.on_event("shutdown")
+def shutdown_event():
+    # 스레드 종료 이벤트 설정
+    running_event.clear()
+    print("👋 종료되었습니다.")
+
 if __name__ == "__main__":
+    import uvicorn
+    import numpy as np
+    
     print("🔧 모델 로딩 중...")
     processor, vlm_model, device = load_smol_vlm()
     whisper_model = load_whisper_model()
     configure_gemini()
 
+    # 웹캠 스레드는 독립 실행 모드에서만 사용
     webcam = threading.Thread(target=webcam_thread)
     analyzer = threading.Thread(target=analyze_loop, args=(vlm_model, processor, device, whisper_model))
 
     webcam.start()
     analyzer.start()
 
+    # FastAPI 앱 실행
+    uvicorn.run(app, host="0.0.0.0", port=8181)
+    
+    # 스레드 종료 대기
     webcam.join()
     analyzer.join()
 

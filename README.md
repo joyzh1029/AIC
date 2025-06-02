@@ -119,3 +119,5 @@ fer 패키지는 PyTorch 2.7.0과 직접 호환되지 않아 --no-deps 옵션으
 - [ ] 향상된 AI 상호작용
 - [ ] 모바일 애플리케이션
 - [ ] 사용자 인증 시스템
+
+FastAPI 서버 실행 uvicorn main:app --reload --port 8181
