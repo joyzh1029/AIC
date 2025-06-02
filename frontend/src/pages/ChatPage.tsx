@@ -3,7 +3,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Link } from "react-router-dom";
-import { MessageCircle, Image as ImageIcon, Heart, User, Send, Phone, Settings, Mic, Camera } from "lucide-react";
+import { Home, Image as ImageIcon, Heart, User, Send, Phone, Settings, Mic, Camera ,Volume2 } from "lucide-react";
+
 
 interface Message {
   id: string;
@@ -84,9 +85,11 @@ const ChatPage = () => {
           <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
             <Phone className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-            <Settings className="h-5 w-5" />
-          </Button>
+          <Link to="/settings">
+            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
+              <Settings className="h-5 w-5" />
+            </Button>
+          </Link>
         </div>
       </header>
 
@@ -115,8 +118,47 @@ const ChatPage = () => {
                   </div>
                 )}
               </div>
-              <span className="text-[11px] text-gray-500 mt-1 mx-1">{message.time}</span>
-            </div>
+              <span className="text-[11px] text-gray-500 mt-1 mx-1">
+                {message.time}
+                <button
+                  className="ml-1 p-1 hover:bg-gray-200 rounded-full"
+                  onClick={async () => {
+                    try {
+                      // Send TTS request to backend
+                      const response = await fetch('http://localhost:8181/api/tts', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ text: message.text })
+                      });
+
+                      if (!response.ok) {
+                        throw new Error('음성 변환 요청 실패');
+                      }
+
+                      // Create and play audio
+                      const audioBlob = await response.blob();
+                      const audioUrl = URL.createObjectURL(audioBlob);
+                      const audio = new Audio(audioUrl);
+                      
+                      // Cleanup after playback
+                      audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                      };
+
+                      await audio.play();
+                    } catch (error) {
+                      console.error('음성 재생 실패:', error);
+                    }
+                  }}
+                  aria-label="음성 듣기"
+                  tabIndex={0}
+                >
+                  <Volume2 className="h-4 w-4 text-gray-500" />
+                </button>
+              </span>
+              </div>
           </div>
         ))}
         <div ref={messagesEndRef} />
@@ -161,9 +203,9 @@ const ChatPage = () => {
 
       {/* Bottom Navigation */}
       <nav className="py-2 grid grid-cols-4 border-t bg-white">
-        <Link to="/" className="flex flex-col items-center justify-center">
-          <MessageCircle className="h-6 w-6 text-blue-500" />
-          <span className="text-[11px] text-blue-500 mt-1">채팅</span>
+        <Link to="/signup" className="flex flex-col items-center justify-center">
+          <Home className="h-6 w-6 text-blue-500" />
+          <span className="text-[11px] text-blue-500 mt-1">홈</span>
         </Link>
         <button className="flex flex-col items-center justify-center">
           <ImageIcon className="h-6 w-6 text-gray-400" />
@@ -173,10 +215,6 @@ const ChatPage = () => {
           <Heart className="h-6 w-6 text-gray-400" />
           <span className="text-[11px] text-gray-400 mt-1">추억</span>
         </button>
-        <Link to="/profile" className="flex flex-col items-center justify-center">
-          <User className="h-6 w-6 text-gray-400" />
-          <span className="text-[11px] text-gray-400 mt-1">프로필</span>
-        </Link>
       </nav>
       </div>
 
