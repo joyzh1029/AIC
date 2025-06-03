@@ -1,3 +1,4 @@
+//원본 chatpage.tsx (수정전)
 import React, { useState, useRef, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";

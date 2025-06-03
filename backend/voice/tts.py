@@ -1,3 +1,5 @@
+from fastapi import APIRouter, Form
+from fastapi.responses import FileResponse
 import json
 from typing import Iterator
 import requests
@@ -5,8 +7,6 @@ import os
 import tempfile
 import glob
 from dotenv import load_dotenv
-from fastapi import APIRouter, Form
-from fastapi.responses import FileResponse
 
 # .env에서 환경변수 불러오기
 load_dotenv()
@@ -35,7 +35,7 @@ def build_tts_stream_body(text: str) -> str:
         "text": text,                          # 변환할 텍스트(프론트에서 입력)
         "stream": True,                        # 스트리밍 모드 사용 (응답속도 빠름)
         "voice_setting": {                     # 목소리/감정/속도 등 설정
-            "voice_id": "Lovely_Girl",
+            "voice_id": "Lovely_Girl",         # 목소리의 id.
             "speed": 1.4,
             "vol": 1.0,
             "pitch": 0,
