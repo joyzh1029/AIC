@@ -126,7 +126,7 @@ const VoiceChat: React.FC<VoiceChatProps> = ({ avatarUrl }) => {
         const formData = new FormData();
         formData.append("audio", blob, "recording.webm");
 
-        const response = await fetch("http://localhost:8181/api/stt", {
+        const response = await fetch("http://localhost:8181/api/live-ai", {
           method: "POST",
           body: formData,
         });
