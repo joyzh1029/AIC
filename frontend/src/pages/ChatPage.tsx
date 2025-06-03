@@ -143,7 +143,7 @@ const ChatPage = () => {
     }
   };
   
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
     
     // 사용자 메시지 추가
@@ -157,17 +157,123 @@ const ChatPage = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputMessage("");
     
-    // 서버로 메시지 전송 및 응답 처리 (간단한 구현)
-    setTimeout(() => {
+    try {
+      // 일정 관련 메시지인지 확인 (키워드 체크 강화)
+      const scheduleKeywords = [
+        '일정', '약속', '미팅', '회의', '언제', '몇시', 
+        '스케줄', '만나', '예약', '취소', '팀 회의', '팀회의',
+        '일정을', '일정을 잡', '회의 일정', '회의일정',
+        '시간과', '시간을', '시간 알려', '시간알려',
+        '일정 잡', '일정잡', '일정관리', '일정 관리'
+      ];
+      
+      // 일정 관련 메시지인지 확인 - 어떤 키워드라도 포함되어 있으면 일정 관련으로 처리
+      const isScheduleRelated = scheduleKeywords.some(keyword => inputMessage.includes(keyword));
+      
+      // API 엔드포인트 선택 - 일정 관련 메시지인지 확인
+      let endpoint = "";
+      
+      // 일정 관련 메시지인 경우 일정 API로 라우팅
+      if (isScheduleRelated) {
+        console.log('일정 관련 메시지 감지:', inputMessage);
+        endpoint = "http://localhost:8181/api/schedule/chat";
+      } else {
+        // 일반 채팅 메시지인 경우 일반 채팅 API로 라우팅
+        console.log('일반 채팅 메시지 감지:', inputMessage);
+        endpoint = "http://localhost:8181/api/chat";
+      }
+      
+      // 서버로 메시지 전송
+      let requestBody;
+      
+      if (isScheduleRelated) {
+        // 일정 관련 API 요청 형식
+        requestBody = {
+          user_id: 'user-1', // 실제 사용자 ID로 대체 필요
+          text: inputMessage,
+        };
+      } else {
+        // 일반 채팅 API 요청 형식
+        requestBody = {
+          messages: [{
+            role: 'user',
+            content: inputMessage,
+            timestamp: Date.now() / 1000
+          }],
+          user_id: 'user-1', // 실제 사용자 ID로 대체 필요
+          ai_id: 'mina',
+          context: {
+            weather: '맑음',
+            sleep: '7시간',
+            stress: '중간',
+            location_scene: '실내, 책상 앞',
+            emotion_history: ['neutral', 'neutral', 'neutral']
+          }
+        };
+      }
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        throw new Error('서버 응답 오류');
+      }
+      
+      const data = await response.json();
+      
+      // AI 응답 메시지 추가
+      let responseText = '';
+      
+      if (isScheduleRelated) {
+        // 일정 관리 API 응답 처리
+        console.log('Schedule API response:', data);
+        
+        // 응답 형식 처리: 일정 API는 message 객체 내에 text를 가지고 있음
+        if (data.success && data.message) {
+          if (typeof data.message === 'object' && data.message.text) {
+            responseText = data.message.text;
+          } else if (typeof data.message === 'string') {
+            responseText = data.message;
+          } else {
+            responseText = JSON.stringify(data.message);
+          }
+        } else {
+          responseText = data.response || data.error || '응답을 받지 못했습니다.';
+        }
+      } else {
+        // 일반 채팅 API 응답 처리
+        console.log('Chat API response:', data);
+        responseText = data.response || '';
+      }
+      
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         sender: "ai",
-        text: `"${inputMessage}"에 대한 응답입니다. 저는 AI 친구 미나입니다.`,
+        text: responseText || '응답을 받지 못했습니다.',
         time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
       };
       
       setMessages(prev => [...prev, aiMessage]);
-    }, 1000);
+      
+    } catch (error) {
+      console.error('메시지 전송 오류:', error);
+      toast.error('메시지를 전송할 수 없습니다.');
+      
+      // 오류 발생 시 기본 응답
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        sender: "ai",
+        text: "죄송합니다. 현재 서버에 연결할 수 없습니다.",
+        time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    }
   };
   
   return (
