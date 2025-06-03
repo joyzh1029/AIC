@@ -2,7 +2,6 @@ import threading
 import os
 from pathlib import Path
 
-from app.vision.webcam import webcam_thread
 from app.multimodal.vlm import load_smol_vlm
 from app.audio.stt import load_whisper_model
 from app.nlp.llm import configure_gemini
@@ -19,18 +18,13 @@ def initialize_models():
 
 def start_background_threads(processor, vlm_model, device, whisper_model):
     """启动后台线程"""
-    # 웹캠 스레드 시작
-    webcam = threading.Thread(target=webcam_thread)
-    webcam.daemon = True
-    
     # 분석 스레드 시작
     analyzer = threading.Thread(target=analyze_loop, args=(vlm_model, processor, device, whisper_model))
     analyzer.daemon = True
     
-    webcam.start()
     analyzer.start()
     
-    return webcam, analyzer
+    return analyzer
 
 def initialize_directories():
     """初始化上传目录"""

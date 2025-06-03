@@ -1,4 +1,4 @@
-# core/stt.py
+# app/audio/stt.py
 # Whisper로 마이크 입력을 텍스트로 변환하고, 목소리 억양 감정을 추출
 
 import whisper
@@ -7,7 +7,7 @@ import soundfile as sf
 import tempfile
 import torch
 
-from core.ser_emotion import analyze_voice_emotion_korean as analyze_voice_emotion
+from app.emotion.ser_emotion import analyze_voice_emotion_korean as analyze_voice_emotion
 
 def load_whisper_model(model_size="base"):
     print("🔊 Whisper 모델 로딩 중...")

@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# 导入集中式路由管理模块
+# 중앙 집중식 라우팅 관리 모듈 가져오기
 from app.routers import api_router
 
 # 코어 모듈 임포트
@@ -37,10 +37,19 @@ BASE_DIR = initialize_directories()
 # 정적 파일 서비스 설정 (업로드된 파일과 생성된 아바타 접근용)
 app.mount("/uploads", StaticFiles(directory=str(BASE_DIR / "uploads")), name="uploads")
 
-# 注册所有路由（一次性注册）
+# 모든 라우트 등록 (일괄 등록)
 app.include_router(api_router)
 
-# 헬스체크 엔드포인트
+# 루트 경로 및 헬스체크 엔드포인트
+@app.get("/")
+async def root():
+    return {
+        "message": "AIC API 서버에 오신 것을 환영합니다",
+        "documentation": "/docs",
+        "health_check": "/health",
+        "version": "1.0.0"
+    }
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "message": "서버가 정상적으로 실행 중입니다."}
@@ -53,8 +62,8 @@ async def startup_event():
     processor, vlm_model, device, whisper_model = initialize_models()
     
     # 분석 스레드 시작
-    global webcam, analyzer
-    webcam, analyzer = start_background_threads(vlm_model, processor, device, whisper_model)
+    global analyzer
+    analyzer = start_background_threads(vlm_model, processor, device, whisper_model)
 
 @app.on_event("shutdown")
 async def shutdown_event():

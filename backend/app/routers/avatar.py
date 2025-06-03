@@ -19,23 +19,23 @@ GENERATED_DIR = BASE_DIR / "uploads" / "generated"
 os.makedirs(ORIGINAL_DIR, exist_ok=True)
 os.makedirs(GENERATED_DIR, exist_ok=True)
 
-# 设置日志
+# 로그 설정
 logger = logging.getLogger(__name__)
 
-# 创建路由器，添加标签和描述
+# 라우터 생성, 태그와 설명 추가
 router = APIRouter(
     prefix="/api/avatar",
     tags=["avatar"],
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "未找到资源"},
-        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "服务器内部错误"}
+        status.HTTP_404_NOT_FOUND: {"description": "리소스를 찾을 수 없음"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "서버 내부 오류"}
     }
 )
 
 @router.post("/upload", 
-          summary="上传用户照片",
-          description="上传用户照片并保存到服务器",
-          response_description="上传成功返回文件路径")
+          summary="사용자 사진 업로드",
+          description="사용자 사진을 업로드하고 서버에 저장",
+          response_description="업로드 성공 시 파일 경로 반환")
 async def upload_photo(
     file: UploadFile = File(...), 
     user_id: str = Form(...),
@@ -44,50 +44,50 @@ async def upload_photo(
 ):
     """사용자 사진 업로드 및 저장"""
     try:
-        # 记录API版本和用户信息
+        # API 버전과 사용자 정보 기록
         logger.info(f"Upload photo API called with version {api_version}")
         if current_user:
             logger.info(f"Authenticated user: {current_user.get('username')}")
         
-        # 文件扩展名验证
+        # 파일 확장자 검증
         file_ext = os.path.splitext(file.filename)[1].lower()
         if file_ext not in [".jpg", ".jpeg", ".png"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="只能上传JPG、JPEG或PNG文件"
+                detail="JPG, JPEG 또는 PNG 파일만 업로드 가능합니다"
             )
         
-        # 创建唯一文件名
+        # 고유한 파일 이름 생성
         unique_filename = f"{user_id}_{uuid.uuid4()}{file_ext}"
         file_path = os.path.join(ORIGINAL_DIR, unique_filename)
         
-        # 保存文件
+        # 파일 저장
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
         logger.info(f"Successfully uploaded file: {unique_filename}")
         return JSONResponse({
             "success": True,
-            "message": "照片上传成功",
+            "message": "사진 업로드 성공",
             "file_path": unique_filename,
             "api_version": api_version
         })
     except HTTPException as he:
-        # 直接重新抛出HTTP异常
+        # HTTP 예외를 직접 다시 발생시킴
         logger.error(f"HTTP error during upload: {he.detail}")
         raise
     except Exception as e:
-        # 记录详细错误并返回通用错误消息
+        # 자세한 오류를 기록하고 일반적인 오류 메시지 반환
         logger.error(f"Error uploading file: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"上传失败: {str(e)}"
+            detail=f"업로드 실패: {str(e)}"
         )
 
 @router.post("/generate",
-          summary="生成用户头像",
-          description="根据上传的照片生成AI头像",
-          response_description="生成成功返回头像URL")
+          summary="사용자 아바타 생성",
+          description="업로드한 사진을 기반으로 AI 아바타 생성",
+          response_description="생성 성공 시 아바타 URL 반환")
 async def create_avatar(
     file_path: str = Form(...), 
     user_id: str = Form(...),

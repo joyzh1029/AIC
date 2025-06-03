@@ -6,7 +6,6 @@ from collections import deque
 from queue import Queue
 from PIL import Image
 
-from app.vision.webcam import capture_webcam_image
 from app.multimodal.vlm import analyze_face_emotion
 from app.audio.stt import transcribe_stream
 from app.vision.fer_emotion import analyze_facial_expression
@@ -21,35 +20,7 @@ running_event.set()
 emotion_logs = deque(maxlen=10)
 analysis_queue = Queue(maxsize=1)
 
-def webcam_thread():
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("웹캠을 열 수 없습니다.")
-        return
-
-    print("웹캠 창 열림. 'q'로 분석 요청, 't'로 종료.")
-
-    while running_event.is_set():
-        ret, frame = cap.read()
-        if not ret:
-            continue
-        cv2.imshow("Webcam - Press 'q' to analyze once, 't' to terminate", frame)
-
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            if not analysis_queue.full():
-                analysis_queue.put(frame.copy())
-                print("🎬 분석 요청이 큐에 등록됨.")
-            else:
-                print("⏳ 이전 분석이 아직 끝나지 않았습니다.")
-        elif key == ord('t'):
-            running_event.clear()
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-# 情绪合成函数已移至 app.emotion.synthesizer 模块
+# 감정 합성 함수는 app.emotion.synthesizer 모듈로 이동되었습니다
 
 def analyze_loop(vlm_model, processor, device, whisper_model):
     while running_event.is_set():

@@ -1,6 +1,6 @@
 """
-API路由依赖项模块
-此模块提供API路由使用的各种依赖项函数
+API 라우트 의존성 모듈
+이 모듈은 API 라우트가 사용하는 다양한 의존성 함수를 제공합니다
 """
 from fastapi import Depends, HTTPException, status, Request, Header
 from typing import Optional, List, Dict, Any
@@ -8,15 +8,15 @@ import time
 from fastapi.security import OAuth2PasswordBearer
 import logging
 
-# 设置日志
+# 로그 설정
 logger = logging.getLogger(__name__)
 
-# 可选的OAuth2认证（如果项目需要）
+# 선택적 OAuth2 인증(프로젝트가 필요한 경우)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
-# 请求计时中间件
+# 요청 시간 측정 미들웨어
 async def measure_execution_time(request: Request, call_next):
-    """测量API请求执行时间的中间件"""
+    """API 요청 실행 시간 측정 미들웨어"""
     start_time = time.time()
     response = await call_next(request)
     process_time = time.time() - start_time
@@ -24,58 +24,58 @@ async def measure_execution_time(request: Request, call_next):
     logger.info(f"Request to {request.url.path} took {process_time:.4f} seconds")
     return response
 
-# API版本依赖
+# API 버전 의존성
 async def get_api_version(
-    x_api_version: Optional[str] = Header(None, description="API版本")
+    x_api_version: Optional[str] = Header(None, description="API 버전")
 ) -> str:
-    """获取API版本的依赖项"""
+    """API 버전 의존성"""
     if x_api_version is None:
-        return "v1"  # 默认版本
+        return "v1"  # 기본 버전
     return x_api_version
 
-# 可选的用户认证依赖
+# 선택적 사용자 인증 의존성
 async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[Dict[str, Any]]:
     """
-    获取当前用户的依赖项
-    如果未提供令牌，则返回None（允许匿名访问）
-    如果提供了无效令牌，则引发异常
+    사용자 인증 의존성
+    토큰이 제공되지 않으면 None 반환(익명 접근 허용)
+    유효하지 않은 토큰이 제공되면 예외 발생
     """
     if token is None:
         return None
     
-    # 这里应该实现令牌验证逻辑
-    # 示例实现，实际项目中应替换为真实的验证逻辑
+    # 여기서는 토큰 검증 로직을 구현해야 합니다
+    # 예시 구현, 실제 프로젝트에서는 진짜 검증 로직으로 교체해야 합니다
     try:
-        # 模拟令牌验证
+        # 토큰 검증 시뮤레이션
         user = {"id": "user123", "username": "testuser"}
         return user
     except Exception as e:
         logger.error(f"Token validation error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的认证凭据",
+            detail="인증무효",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-# 必需的用户认证依赖
+# 필수 사용자 인증 의존성
 async def get_current_active_user(
     current_user: Optional[Dict[str, Any]] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
-    获取当前活跃用户的依赖项
-    要求用户必须已认证
+    사용자 인증 의존성
+    사용자가 인증되어야 함
     """
     if current_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="需要认证",
+            detail="인증필요",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return current_user
 
-# 通用错误处理
+# 일반 오류 처리
 def handle_exceptions(request: Request, exc: Exception) -> Dict[str, Any]:
-    """统一的异常处理函数"""
+    """일반 오류 처리 함수"""
     logger.error(f"Error processing request {request.url.path}: {str(exc)}")
     
     if isinstance(exc, HTTPException):
@@ -87,11 +87,11 @@ def handle_exceptions(request: Request, exc: Exception) -> Dict[str, Any]:
             }
         }
     
-    # 处理其他类型的异常
+    # 다른 유형의 예외 처리
     return {
         "success": False,
         "error": {
             "code": 500,
-            "message": "服务器内部错误"
+            "message": "서버내부오류"
         }
     }

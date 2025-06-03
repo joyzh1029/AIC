@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from app.nlp.llm import generate_response
-from app.emotion.summary import synthesize_emotion
+from app.emotion.synthesizer import synthesize_emotion_3way
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -40,8 +40,12 @@ async def chat_endpoint(request: ChatRequest):
         user_messages = [msg.content for msg in request.messages if msg.role == "user"]
         user_text = user_messages[-1] if user_messages else ""
         
-        # 감정 합성 (여기서는 간단히 'neutral'로 설정)
-        emotion = "neutral"
+        # 감정 합성 - 세 방향 감정 합성 함수 사용
+        # 여기서는 예시로 기본값을 사용하지만, 실제 응용에서는 컨텍스트나 분석에서 가져와야 함
+        face_emotion = context.get("face_emotion", "neutral")
+        text_emotion = context.get("text_emotion", "neutral")
+        voice_emotion = context.get("voice_emotion", "neutral")
+        emotion = synthesize_emotion_3way(face_emotion, text_emotion, voice_emotion)
         
         # 응답 생성
         response_text = generate_response(emotion, user_text, context)
