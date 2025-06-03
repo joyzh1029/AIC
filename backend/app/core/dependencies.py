@@ -36,26 +36,14 @@ async def get_api_version(
 # 선택적 사용자 인증 의존성
 async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[Dict[str, Any]]:
     """
-    사용자 인증 의존성
-    토큰이 제공되지 않으면 None 반환(익명 접근 허용)
-    유효하지 않은 토큰이 제공되면 예외 발생
+    사용자 인증 의존성 (테스트를 위해 임시 비활성화)
+    테스트를 위해 항상 테스트 사용자를 반환합니다
     """
-    if token is None:
-        return None
-    
-    # 여기서는 토큰 검증 로직을 구현해야 합니다
-    # 예시 구현, 실제 프로젝트에서는 진짜 검증 로직으로 교체해야 합니다
-    try:
-        # 토큰 검증 시뮤레이션
-        user = {"id": "user123", "username": "testuser"}
-        return user
-    except Exception as e:
-        logger.error(f"Token validation error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="인증무효",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # 테스트를 위해 Firebase 인증 비활성화
+    # 항상 테스트 사용자 반환
+    logger.info("Firebase authentication disabled for testing. Using test user.")
+    user = {"id": "test123", "username": "testuser"}
+    return user
 
 # 필수 사용자 인증 의존성
 async def get_current_active_user(

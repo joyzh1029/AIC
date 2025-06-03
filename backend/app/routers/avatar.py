@@ -96,28 +96,56 @@ async def create_avatar(
 ):
     """업로드된 사진으로 아바타 생성"""
     try:
+        # API 버전 및 사용자 정보 로깅
+        logger.info(f"Generate avatar API called with version {api_version}")
+        if current_user:
+            logger.info(f"Authenticated user: {current_user.get('username')}")
+        
         # 원본 파일 경로
         original_path = os.path.join(ORIGINAL_DIR, file_path)
+        logger.info(f"Looking for original file at: {original_path}")
+        
         if not os.path.exists(original_path):
+            logger.error(f"Original file not found: {original_path}")
             raise HTTPException(status_code=404, detail="업로드된 파일을 찾을 수 없습니다.")
         
         # 출력 파일 경로
         output_filename = f"{user_id}_avatar_{uuid.uuid4()}.png"
         output_path = os.path.join(GENERATED_DIR, output_filename)
+        logger.info(f"Output path set to: {output_path}")
         
         # 특징 추출
-        features = extract_features(original_path)
+        logger.info("Extracting features from image...")
+        try:
+            features = extract_features(original_path)
+            logger.info("Feature extraction successful")
+        except Exception as feature_err:
+            logger.error(f"Feature extraction failed: {str(feature_err)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"특징 추출 실패: {str(feature_err)}")
         
         # 아바타 생성
-        generate_avatar(features, output_path)
+        logger.info("Generating avatar...")
+        try:
+            generate_avatar(features, output_path)
+            logger.info(f"Avatar generated successfully at {output_path}")
+        except Exception as avatar_err:
+            logger.error(f"Avatar generation failed: {str(avatar_err)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"아바타 생성 실패: {str(avatar_err)}")
         
         # 상대 URL 경로 생성 (프론트엔드에서 접근 가능한)
         relative_path = f"/uploads/generated/{output_filename}"
+        logger.info(f"Returning relative path: {relative_path}")
         
         return JSONResponse({
             "success": True,
             "message": "아바타가 성공적으로 생성되었습니다.",
             "avatar_path": relative_path
         })
+    except HTTPException as he:
+        # HTTP 예외 직접 다시 발생
+        logger.error(f"HTTP error during avatar generation: {he.detail}")
+        raise
     except Exception as e:
+        # 자세한 오류 기록
+        logger.error(f"Unexpected error in avatar generation: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"아바타 생성 실패: {str(e)}")

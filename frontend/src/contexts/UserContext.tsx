@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { User, onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/firebase";
+import { User } from "firebase/auth";
 
 type UserContextType = {
   user: User | null;
@@ -10,14 +9,28 @@ type UserContextType = {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const mockUser = {
+    uid: "test-user-123",
+    email: "test@example.com",
+    displayName: "Test User",
+    photoURL: null,
+    emailVerified: true,
+    isAnonymous: false,
+    metadata: {},
+    providerData: [],
+    refreshToken: "mock-refresh-token",
+    tenantId: null,
+    delete: async () => {},
+    getIdToken: async () => "mock-id-token",
+    getIdTokenResult: async () => ({ token: "mock-token", claims: {}, expirationTime: "", authTime: "", issuedAtTime: "", signInProvider: null, signInSecondFactor: null }),
+    reload: async () => {},
+    toJSON: () => ({})
+  } as User;
+
+  const [user, setUser] = useState<User | null>(mockUser);
 
   useEffect(() => {
-    // 로그인 상태를 항상 감지
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-    });
-    return () => unsubscribe();
+    console.log("Firebase authentication disabled for testing. Using mock user.");
   }, []);
 
   return (

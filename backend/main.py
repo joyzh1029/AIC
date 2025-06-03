@@ -1,13 +1,16 @@
 import os
 import sys
+import logging
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 # 현재 디렉토리를 Python 경로에 추가 (상대 경로 임포트를 위함)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 # 중앙 집중식 라우팅 관리 모듈 가져오기
 from app.routers import api_router
@@ -22,7 +25,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS 설정
+# CORS 미들웨어 추가
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

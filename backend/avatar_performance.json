@@ -1,0 +1,39 @@
+[
+  {
+    "operation_name": "Feature Extraction",
+    "start_time": 1748930034.9927945,
+    "end_time": 1748930040.2189765,
+    "duration": 5.226181983947754,
+    "token_usage": {
+      "estimated_input_tokens": 40,
+      "estimated_output_tokens": 237,
+      "api_call_duration": 5.225212574005127
+    },
+    "cost_estimate": null,
+    "image_size": null,
+    "model_used": "gemini-1.5-flash",
+    "success": true,
+    "error_message": null,
+    "timestamp": "2025-06-03T14:53:54.992794"
+  },
+  {
+    "operation_name": "Avatar Generation",
+    "start_time": 1748930040.2201939,
+    "end_time": 1748930089.5646565,
+    "duration": 49.344462633132935,
+    "token_usage": {
+      "model": "gpt-image-1",
+      "size": "1024x1536",
+      "quality": "high",
+      "api_call_duration": 49.333295822143555,
+      "images_generated": 1,
+      "output_format": "png"
+    },
+    "cost_estimate": 0.06,
+    "image_size": "1024x1536",
+    "model_used": "gpt-image-1",
+    "success": true,
+    "error_message": null,
+    "timestamp": "2025-06-03T14:54:00.220193"
+  }
+]
