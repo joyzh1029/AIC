@@ -1,10 +1,10 @@
-//원본 chatpage.tsx (수정전)
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Link, useNavigate } from "react-router-dom";
-import { Image as  Send, Phone, Settings, Mic, Camera, Volume2 } from "lucide-react";
+import { Image as Send, Phone, Settings, Mic, Camera, Volume2 } from "lucide-react";
+import useVoiceRecorder from "@/hooks/useVoiceRecorder.ts"; // 분리된 훅
 
 // 메시지 타입
 interface Message {
@@ -13,65 +13,6 @@ interface Message {
   text: string;
   time: string;
   image?: string;
-}
-
-// 음성 녹음 훅 (간단 예시)
-const useVoiceRecorder = () => {
-  const [recording, setRecording] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const mediaRecorder = useRef<MediaRecorder | null>(null);
-  const audioChunks = useRef<Blob[]>([]);
-
-  const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder.current = new MediaRecorder(stream);
-    audioChunks.current = [];
-    mediaRecorder.current.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunks.current.push(event.data);
-      }
-    };
-    mediaRecorder.current.onstop = () => {
-      const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" });
-      setAudioUrl(URL.createObjectURL(audioBlob));
-    };
-    mediaRecorder.current.start();
-    setRecording(true);
-  };
-
-  const stopRecording = async () => {
-    if (mediaRecorder.current) {
-      return new Promise<Blob>((resolve) => {
-        mediaRecorder.current!.onstop = () => {
-          const audioBlob = new Blob(audioChunks.current, { type: "audio/wav" });
-          setAudioUrl(URL.createObjectURL(audioBlob));
-          setRecording(false);
-          resolve(audioBlob);
-        };
-        mediaRecorder.current.stop();
-      });
-    }
-  };
-
-  return { recording, audioUrl, startRecording, stopRecording, setAudioUrl };
-};
-
-// STT 서버 전송 함수 (키 이름만 통일)
-async function sendAudioToSTT(audioBlob: Blob): Promise<string> {
-  const formData = new FormData();
-  formData.append("audio", audioBlob, "voice.wav");
-
-  const res = await fetch("http://localhost:8181/api/stt", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    throw new Error("STT 서버 오류");
-  }
-
-  const data = await res.json();
-  return data.result || data.text; // 키 중 하나만 있어도 자동 대응
 }
 
 const ChatPage = () => {
@@ -118,46 +59,99 @@ const ChatPage = () => {
     }, 1000);
   };
 
-  // STT(음성) 메시지 전송
-const handleMicClick = async () => {
-  if (!isListening) {
-    setIsListening(true);
-    await startRecording();
-    // 음성 안내 메시지는 Textarea에만 노출
-  } else {
-    setIsListening(false);
-    setLoadingSTT(true);
-    const audioBlob = await stopRecording();
+  // AI 응답을 백엔드로 전송
+  const sendAIResponseToBackend = async (response: Message) => {
     try {
-      // === ① Whisper STT 결과 수신 ===
-      const sttText = await sendAudioToSTT(audioBlob!);
+      const res = await fetch("http://localhost:8181/api/ai-response", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: response.text,
+          sender: response.sender,
+        }),
+      });
 
-      // === ② 사용자 메시지로 추가 ===
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        sender: "user",
-        text: sttText,
-        time: new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }),
-      };
-      setMessages((prev) => [...prev, userMsg]);
+      if (!res.ok) {
+        throw new Error("AI 응답을 백엔드로 전송하는 데 실패했습니다.");
+      }
 
-      // === ③ AI 응답 추가(모의) ===
-      setTimeout(() => {
+      const data = await res.json();
+      console.log("백엔드 응답:", data.message);
+    } catch (error) {
+      console.error("AI 응답 전송 중 오류:", error);
+    }
+  };
+
+  // STT(음성) 메시지 전송 정광조 수정코드
+  const handleMicClick = async () => {
+    if (!isListening) {
+      // 녹음 시작
+      setIsListening(true);
+      await startRecording();
+    } else {
+      // 녹음 종료 및 하드코딩된 응답 출력
+      setIsListening(false);
+      setLoadingSTT(true);
+      const audioBlob = await stopRecording(); // 녹음 종료
+
+      try {
+        // 하드코딩된 사용자 응답 추가
+        const userMsg: Message = {
+          id: Date.now().toString(),
+          sender: "user",
+          text: "오늘은 좀 지치는 일이 많았어, 위로받고 싶은 하루이려나.", // 사용자 응답 하드코딩
+          time: new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }),
+        };
+        setMessages((prev) => [...prev, userMsg]);
+
+        // 하드코딩된 AI 응답 추가
+        const hardcodedResponse = "오늘도 애썼어. 충분히 잘 해냈으니, 지금은 편히 쉬도록 해~";
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
           sender: "ai",
-          text: `STT로 받은 메시지에 대한 AI 응답 예시입니다.`,
+          text: hardcodedResponse,
           time: new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }),
         };
         setMessages((prev) => [...prev, aiMsg]);
+
+        // 백엔드로 AI 응답 전송
+        await sendAIResponseToBackend(aiMsg);
+      } catch (error) {
+        alert("녹음 처리 중 오류가 발생했습니다.");
+      } finally {
         setLoadingSTT(false);
-      }, 1000);
-    } catch (error) {
-      alert("음성 인식(STT)에 실패했습니다.");
-      setLoadingSTT(false);
+      }
     }
-  }
-};
+  };
+
+  // TTS로 하드코딩된 응답 재생
+  const playTTS = async (text: string) => {
+    try {
+      const formData = new FormData();
+      formData.append("text", text); // TTS로 변환할 텍스트 추가
+
+      const response = await fetch("http://localhost:8181/api/tts", {
+        method: "POST",
+        body: formData, // Form 데이터로 전달
+      });
+
+      if (!response.ok) {
+        throw new Error("TTS 오디오 파일을 가져오는 데 실패했습니다.");
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // 오디오 재생
+      const audio = new Audio(audioUrl);
+      audio.play();
+    } catch (error) {
+      console.error("TTS 재생 중 오류:", error);
+      alert("TTS 오디오 파일을 가져오는 데 실패했습니다.");
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -220,9 +214,7 @@ const handleMicClick = async () => {
                   {message.sender === "ai" && (
                     <button
                       className="ml-1 p-1 hover:bg-gray-200 rounded-full"
-                      onClick={async () => {
-                        // TTS (ai가 생성한 음성 듣기)필요시 구현
-                      }}
+                      onClick={() => playTTS(message.text)} // 백엔드에서 TTS 오디오 가져오기
                       aria-label="음성 듣기"
                       tabIndex={0}
                     >

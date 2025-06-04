@@ -4,8 +4,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import axios from "axios";
 
-
+// 后端API基础URL
+const API_BASE_URL = "http://localhost:8181";
 
 const CreateAiFriend = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -49,15 +51,47 @@ const CreateAiFriend = () => {
     
     setIsGenerating(true);
     try {
-      // TODO: Replace with actual API call to generate AI friend
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulated delay
+      // 第一步：上传照片
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('user_id', user?.uid || 'default_user');
       
-      // Simulated response - in real implementation, this should be the API response
-      // For now, we're using the original image as a placeholder
-      const generatedImageUrl = previewUrl;
-      setGeneratedImage(generatedImageUrl);
+      const uploadResponse = await axios.post(
+        `${API_BASE_URL}/api/avatar/upload`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      
+      if (!uploadResponse.data.success) {
+        throw new Error('Failed to upload photo');
+      }
+      
+      // 第二步：生成头像
+      const generateData = new FormData();
+      generateData.append('file_path', uploadResponse.data.file_path);
+      generateData.append('user_id', user?.uid || 'default_user');
+      
+      const generateResponse = await axios.post(
+        `${API_BASE_URL}/api/avatar/generate`,
+        generateData
+      );
+      
+      if (!generateResponse.data.success) {
+        throw new Error('Failed to generate avatar');
+      }
+      
+      // 设置生成的头像URL
+      const avatarUrl = `${API_BASE_URL}${generateResponse.data.avatar_path}`;
+      setGeneratedImage(avatarUrl);
+      
+      // 保存头像URL到用户上下文或本地存储，以便在聊天页面使用
+      if (user) {
+        localStorage.setItem(`avatar_${user.uid}`, avatarUrl);
+      }
+      
     } catch (error) {
       console.error('Failed to generate AI friend:', error);
+      alert('头像生成失败，请重试');
     } finally {
       setIsGenerating(false);
     }

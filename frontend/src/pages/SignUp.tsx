@@ -6,10 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
-import { auth, googleProvider } from "@/firebase";
-import { signInWithPopup } from "firebase/auth";
+// 测试模式：移除Firebase认证导入
 import { useUser } from "@/contexts/UserContext";
-import { deleteUser } from "firebase/auth";
 
 const SignUp = () => {
   const [email, setEmail] = useState("");
@@ -18,22 +16,22 @@ const SignUp = () => {
   const navigate = useNavigate();
 
   const { user, setUser } = useUser();
-  // 구글 로그인 함수
+  // 구글 로그인 함수 (测试模式：简化登录功能)
   const handleGoogleLogin = async () => {
     if (user) {
       alert("이미 로그인되어 있습니다.");
       return;
     }
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      setUser(result.user);
+      // 测试模式：直接跳转到创建好友页面，不调用Firebase
+      console.log("Firebase authentication disabled for testing. Using mock user.");
       navigate('/create-ai-friend');
     } catch (error) {
       alert("구글 로그인 실패: " + error);
     }
   };
 
-  // 계정 삭제 함수
+  // 계정 삭제 함수 (测试模式：简化账号删除功能)
   const handleDeleteAccount = async () => {
     if (!user) {
       alert("로그인 후 이용 가능합니다.");
@@ -43,24 +41,20 @@ const SignUp = () => {
       return;
     }
     try {
-      await deleteUser(user);
+      // 测试模式：直接设置用户为null，不调用Firebase
+      console.log("Firebase authentication disabled for testing. Deleting mock user.");
       setUser(null);
       alert("계정이 삭제되었습니다.");
       navigate("/");
     } catch (error: any) {
-      // 재로그인 필요 에러 처리
-      if (error.code === "auth/requires-recent-login") {
-        alert("보안을 위해 다시 로그인 후 계정 삭제가 가능합니다. 로그아웃 후 다시 로그인 해주세요.");
-      } else {
-        alert("계정 삭제 실패: " + error.message);
-      }
+      alert("계정 삭제 실패");
     }
   };
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Login attempted with:", { email, password, rememberMe });
-    // Redirect to create AI friend page after login
+    // 测试模式：直接登录并跳转
     navigate('/create-ai-friend');
   };
 
