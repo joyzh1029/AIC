@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Form
+from fastapi import FastAPI, APIRouter, Form
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 import json
 from typing import Iterator
 import requests
@@ -7,6 +8,7 @@ import os
 import tempfile
 import glob
 from dotenv import load_dotenv
+import uuid
 
 # .env에서 환경변수 불러오기
 load_dotenv()
@@ -14,11 +16,29 @@ MINIMAX_GROUP_ID = os.getenv("MINIMAX_GROUP_ID")
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 MINIMAX_TTS_URL = f"https://api.minimax.chat/v1/t2a_v2?GroupId={MINIMAX_GROUP_ID}"
 
+# FastAPI 애플리케이션 객체 생성
+app = FastAPI()
+
+# CORS 설정 추가
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8080"],  # 프론트엔드 URL (React 개발 서버)
+    allow_credentials=True,
+    allow_methods=["*"],  # 모든 HTTP 메서드 허용
+    allow_headers=["*"],  # 모든 헤더 허용
+)
+
 # FastAPI 라우터 객체 생성
 router = APIRouter(
     prefix="/api",     # 실제 엔드포인트에 맞춰 수정
     tags=["tts"]       # Swagger 등 문서에서 tts 그룹으로 표시
 )
+
+SAVE_DIRECTORY = "audio_files"
+
+# 디렉터리가 없으면 생성
+if not os.path.exists(SAVE_DIRECTORY):
+    os.makedirs(SAVE_DIRECTORY)
 
 def build_tts_stream_headers() -> dict:
     """Minimax TTS API 호출을 위한 헤더 생성 함수"""
@@ -31,15 +51,14 @@ def build_tts_stream_headers() -> dict:
 def build_tts_stream_body(text: str) -> str:
     """TTS 변환 요청에 사용할 payload(body) 생성 함수"""
     body = json.dumps({
-        "model": "speech-02-turbo",            # 사용할 TTS 모델
+        "model": "speech-02-hd",            # 사용할 TTS 모델
         "text": text,                          # 변환할 텍스트(프론트에서 입력)
         "stream": True,                        # 스트리밍 모드 사용 (응답속도 빠름)
         "voice_setting": {                     # 목소리/감정/속도 등 설정
-            "voice_id": "Lovely_Girl",         # 목소리의 id.
-            "speed": 1.4,
-            "vol": 1.0,
-            "pitch": 0,
-            "emotion": "angry"
+            "voice_id": "Korean_SweetGirl",         # 목소리의 id.
+            "speed": 1,
+            "vol": 1,
+            "pitch": 1,
         },
         "audio_setting": {                     # 오디오 파일 출력 옵션
             "sample_rate": 32000,
@@ -82,10 +101,10 @@ def cleanup_old_files(directory=".", pattern="output_*.mp3", max_files=50):
 async def tts_api(text: str = Form(...)):
     """
     프론트엔드에서 전송한 텍스트를 TTS로 변환해 mp3 파일로 반환하는 엔드포인트.
-    1. 임시 mp3 파일 생성
-    2. 파일이 50개 초과하면 오래된 것부터 삭제
-    3. mp3 파일을 FileResponse로 반환
     """
+    # 데이터 로깅
+    print(f"백엔드로 전송된 텍스트: {text}")  # 콘솔에 출력
+
     # 임시 파일로 mp3 저장
     with tempfile.NamedTemporaryFile(delete=False, prefix="output_", suffix=".mp3") as temp_file:
         temp_file_path = temp_file.name
@@ -95,7 +114,12 @@ async def tts_api(text: str = Form(...)):
                 decoded_hex = bytes.fromhex(chunk)
                 audio += decoded_hex
         temp_file.write(audio)
+
     # mp3 파일이 50개 초과 시 오래된 파일 자동 삭제
     cleanup_old_files(directory=".", pattern="output_*.mp3", max_files=50)
+
     # mp3 파일 반환
     return FileResponse(temp_file_path, media_type="audio/mp3", filename=os.path.basename(temp_file_path))
+
+# 라우터를 FastAPI 앱에 등록
+app.include_router(router)
