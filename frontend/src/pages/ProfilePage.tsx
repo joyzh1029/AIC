@@ -1,9 +1,27 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Sun, MessageCircle, Home, Settings, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react"; 
+
+
 
 const Profile = () => {
   const navigate = useNavigate();
+  const [aiName, setAiName] = useState(""); 
+  const [aiImageUrl, setAiImageUrl] = useState("");
+  useEffect(() => {
+    const savedUrl = localStorage.getItem("my-ai-image"); // ✅ localStorage에서 불러오기
+    if (savedUrl) {
+      setAiImageUrl(savedUrl);
+    }
+    const savedName = localStorage.getItem("my-ai-name"); // ✅ 닉네임 로딩
+    if (savedName) {
+      setAiName(savedName);
+    }
+  }, []);
+
+
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Left Sidebar */}
@@ -36,12 +54,12 @@ const Profile = () => {
             <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
               <div className="flex justify-center mb-4">
                 <img 
-                  src="/example_avatar_profile.png" 
+                  src={aiImageUrl || "/example_avatar_profile.png"} 
                   alt="AI Friend" 
                   className="w-24 h-24 rounded-full"
                 />
               </div>
-              <h2 className="text-xl font-medium mb-1">미나</h2>
+              <h2 className="text-xl font-medium mb-1">{aiName}</h2>
               <p className="text-gray-500 text-sm mb-4">오늘 날씨가 좋아서 기분이 상쾌해!</p>
               
               {/* Stats */}

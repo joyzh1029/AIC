@@ -4,11 +4,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import axios from "axios"; // 추가
 
 
 
 const CreateAiFriend = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -24,44 +27,122 @@ const CreateAiFriend = () => {
   }, [user, navigate]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      const fileReader = new FileReader();
-      fileReader.onload = () => {
-        setPreviewUrl(fileReader.result as string);
-      };
-      fileReader.readAsDataURL(file);
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFile(e.target.files[0]);
+      setPreviewUrl(URL.createObjectURL(e.target.files[0]));
     }
   };
 
 
   
+  // const handleCreateAiFriend = async () => {
+  //   // If we already have a generated image, navigate to chat
+  //   if (generatedImage) {
+  //     navigate('/chat');
+  //     return;
+  //   }
+
+  //   // Otherwise, generate new AI friend
+  //   if (!selectedFile) return;
+
+  //   setIsGenerating(true);
+  //   setResult(null);
+
+  //   const formData = new FormData();
+  //   formData.append("image", selectedFile);
+
+  //   try {
+  //     const response = await axios.post(
+  //       "http://localhost:8183/wanna-image/",
+  //       formData,
+  //       {
+  //         headers: {
+  //           "Content-Type": "multipart/form-data",
+  //         },
+  //       }
+  //     );
+  //     // 서버에서 이미지 파일 경로나 base64를 반환한다면 아래처럼 처리
+  //     if (response.data && response.data.image_url) {
+  //       setGeneratedImage(response.data.image_url);
+  //     } else if (response.data && response.data.base64_image) {
+  //       setGeneratedImage(`data:image/png;base64,${response.data.base64_image}`);
+  //     } else {
+  //       // 서버에서 파일을 직접 반환하지 않는 경우, 임시로 업로드한 이미지 미리보기 사용
+  //       setGeneratedImage(previewUrl);
+  //     }
+  //     setResult(JSON.stringify(response.data));
+  //   } catch (error: any) {
+  //     setResult("업로드 실패: " + (error.response?.data?.error || error.message));
+  //   } finally {
+  //     setIsGenerating(false);
+  //   }
+  // };
+
   const handleCreateAiFriend = async () => {
-    // If we already have a generated image, navigate to chat
-    if (generatedImage) {
-      navigate('/chat');
-      return;
+  if (generatedImage) {
+    navigate('/chat');
+    return;
+  }
+
+  if (!selectedFile) return;
+
+  setIsGenerating(true);
+  setResult(null);
+
+  const formData = new FormData();
+  formData.append("image", selectedFile);
+
+  try {
+    const response = await axios.post(
+      "http://localhost:8183/wanna-image/",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    if (response.data?.image_url) {
+      const imageUrl = response.data.image_url;
+      setGeneratedImage(imageUrl);
+      localStorage.setItem("my-ai-image", imageUrl);
+
+      if (name.trim()) {
+        localStorage.setItem("my-ai-name", name.trim());
+      }
+
+    } else if (response.data?.base64_image) {
+      const base64Url = `data:image/png;base64,${response.data.base64_image}`;
+      setGeneratedImage(base64Url);
+      localStorage.setItem("my-ai-image", base64Url);
+
+      // ✅ 닉네임 저장 추가
+      if (name.trim()) {
+        localStorage.setItem("my-ai-name", name.trim());
+      }
+
+    } else {
+      setGeneratedImage(previewUrl || "");
+      if (previewUrl) {
+        localStorage.setItem("my-ai-image", previewUrl);
+      }
+
+      // ✅ 닉네임 저장 추가
+      if (name.trim()) {
+        localStorage.setItem("my-ai-name", name.trim());
+      }
     }
 
-    // Otherwise, generate new AI friend
-    if (!selectedFile) return;
-    
-    setIsGenerating(true);
-    try {
-      // TODO: Replace with actual API call to generate AI friend
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulated delay
-      
-      // Simulated response - in real implementation, this should be the API response
-      // For now, we're using the original image as a placeholder
-      const generatedImageUrl = previewUrl;
-      setGeneratedImage(generatedImageUrl);
-    } catch (error) {
-      console.error('Failed to generate AI friend:', error);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
+    setResult(JSON.stringify(response.data));
+  } catch (error: any) {
+    setResult("업로드 실패: " + (error.response?.data?.error || error.message));
+  } finally {
+    setIsGenerating(false);
+  }
+};
+
+
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">

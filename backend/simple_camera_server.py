@@ -172,6 +172,7 @@ async def capture_image():
 def root():
     return {"message": "카메라 서버가 실행 중입니다"}
 
+
 # 상태 확인 엔드포인트
 @app.get("/health")
 def health_check():
