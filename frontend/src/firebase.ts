@@ -1,29 +1,42 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-/*import { getAnalytics } from "firebase/analytics";*/
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// 测试模式：移除真实Firebase初始化，使用模拟对象
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_REACT_APP_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_REACT_APP_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_REACT_APP_FIREBASE_MEASUREMENT_ID
+// 模拟的Firebase Auth对象
+// 创建一个模拟的Auth对象，实现必要的方法
+// 这个对象将替代真实的Firebase Auth
+
+const mockAuthUser = {
+  uid: "test-user-123",
+  email: "test@example.com",
+  displayName: "Test User",
+  photoURL: null,
+  emailVerified: true,
+  isAnonymous: false,
+  metadata: {},
+  providerData: [],
+  refreshToken: "mock-refresh-token",
+  tenantId: null,
+  delete: async () => {},
+  getIdToken: async () => "mock-id-token",
+  getIdTokenResult: async () => ({ token: "mock-token", claims: {}, expirationTime: "", authTime: "", issuedAtTime: "", signInProvider: null, signInSecondFactor: null }),
+  reload: async () => {},
+  toJSON: () => ({})
 };
 
-// 환경변수 검증
-if (!import.meta.env.VITE_REACT_APP_FIREBASE_API_KEY) {
-  throw new Error('Firebase API key is missing');
-}
+// 模拟的Auth对象
+export const auth = {
+  currentUser: mockAuthUser,
+  signInWithEmailAndPassword: async () => ({ user: mockAuthUser }),
+  createUserWithEmailAndPassword: async () => ({ user: mockAuthUser }),
+  signOut: async () => {},
+  onAuthStateChanged: (callback: any) => {
+    // 立即调用回调函数，传入模拟用户
+    setTimeout(() => callback(mockAuthUser), 0);
+    // 返回一个空函数作为取消订阅函数
+    return () => {};
+  }
+};
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-/* const analytics = getAnalytics(app); */
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+// 模拟的GoogleAuthProvider
+export const googleProvider = {
+  addScope: () => {}
+};

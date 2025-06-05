@@ -1,30 +1,91 @@
-# Python bytecode
+# Dependencies
 __pycache__/
 *.py[cod]
-*.so
-*.egg
-*.egg-info/
-dist/
-build/
-.eggs/
+*$py.class
 
-# Virtual environments
-.venv/
+# Virtual Environment
 venv/
-ENV/
 env/
+ENV/
+.venv/
+.env/
+venv.bak/
 env.bak/
 
-# 환경 변수/비밀키 파일
+# Build Output
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+wheels/
+*.whl
+
+# Environment Variables
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local
 
-# IDE 설정
-.vscode/
-.idea/
-*.swp
-
-
-# 로그/임시 파일
+# Logs
+logs/
 *.log
-*.tmp
+pip-log.txt
+pip-delete-this-directory.txt
 
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python Specific
+*.so
+.Python
+develop-eggs/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+share/python-wheels/
+.installed.cfg
+MANIFEST
+
+# Database Files
+*.db
+*.sqlite3
+*.sqlite
+
+# FastAPI & Security
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+api_key.txt
+*.pem
+*.key
+
+# Temporary Files
+*.tmp
+*.temp
+.cache/
+temp/
+tmp/
+uploads/

@@ -2,273 +2,397 @@ import { useState, useRef, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Link, useNavigate } from "react-router-dom";
-import { Image as Send, Phone, Settings, Mic, Camera, Volume2 } from "lucide-react";
-import useVoiceRecorder from "@/hooks/useVoiceRecorder.ts"; // 분리된 훅
+import { Link } from "react-router-dom";
+import { Home, Image as ImageIcon, Heart, User, Send, Phone, Settings, Mic, Camera, Volume2 } from "lucide-react";
+import { toast } from "sonner";
 
-// 메시지 타입
+
 interface Message {
   id: string;
   sender: "user" | "ai";
   text: string;
   time: string;
   image?: string;
+  voice?: string;
 }
 
-const ChatPage = () => {
-  const [messages, setMessages] = useState<Message[]>([
+// const ChatPage = () => {
+//   const [messages, setMessages] = useState<Message[]>([
+//     {
+//       id: "1",
+//       sender: "ai",
+//       text: "안녕, 오늘 만나서 반가워! 나는 너의 AI 친구미나야, 어떻게지내고있어?",
+//       time: "오전 10:23",
+//     },
+//   ]);
+  
+//   const [inputMessage, setInputMessage] = useState("");
+//   const [isCapturing, setIsCapturing] = useState(false);
+//   const [showCameraPreview, setShowCameraPreview] = useState(false);
+//   const [cameraStreamUrl, setCameraStreamUrl] = useState("");
+//   const videoRef = useRef<HTMLVideoElement>(null);
+//   const canvasRef = useRef<HTMLCanvasElement>(null);
+//   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+//   const scrollToBottom = () => {
+//     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+//   };
+  
+//   useEffect(() => {
+//     scrollToBottom();
+//   }, [messages]);
+  const ChatPage = () => {
+    // const [messages, setMessages] = useState<Message[]>([
+    //   {
+    //     id: "1",
+    //     sender: "ai",
+    //     text: "안녕, 오늘 만나서 반가워! 나는 너의 AI 친구 미나야, 어떻게지내고있어?",
+    //     time: "오전 10:23",
+    //   },
+    // ]);
+    
+    const [inputMessage, setInputMessage] = useState("");
+    const [aiImageUrl, setAiImageUrl] = useState(""); // ✅ 이미지 상태 추가
+    const [isCapturing, setIsCapturing] = useState(false);
+    const [showCameraPreview, setShowCameraPreview] = useState(false);
+    const [cameraStreamUrl, setCameraStreamUrl] = useState("");
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const scrollToBottom = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+      scrollToBottom();
+    }, [messages]);
+
+    useEffect(() => {
+      const savedUrl = localStorage.getItem("my-ai-image"); // ✅ localStorage에서 불러오기
+      if (savedUrl) {
+        setAiImageUrl(savedUrl);
+      }
+    }, []);
+
+  const [aiName, setAiName] = useState(""); // 기본값
+
+  useEffect(() => {
+    const savedUrl = localStorage.getItem("my-ai-image");
+    if (savedUrl) setAiImageUrl(savedUrl);
+
+    const savedName = localStorage.getItem("my-ai-name");
+    if (savedName) setAiName(savedName); // 닉네임 불러오기
+  }, []);
+
+    useEffect(() => {
+  const savedName = localStorage.getItem("my-ai-name") || "미나";
+
+  setMessages([
     {
-      id: "1",
+      id: Date.now().toString(),
       sender: "ai",
-      text: "안녕, 만나서 반가워! 나는 너의 AI 친구 미나야. 어떻게 지내고 있어?",
-      time: "오전 10:23",
+      text: `안녕, 오늘 만나서 반가워! 나는 너의 AI 친구 ${savedName}야, 어떻게 지내고 있어?`,
+      time: new Date().toLocaleTimeString("ko-KR", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
     },
   ]);
-  const [inputMessage, setInputMessage] = useState("");
-  const [isListening, setIsListening] = useState(false);
-  const [loadingSTT, setLoadingSTT] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { recording, startRecording, stopRecording } = useVoiceRecorder();
-  const navigate = useNavigate();
+}, []);
 
-  // 메시지 스크롤 항상 하단 고정
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // 텍스트 메시지 전송
+  
+  // 카메라 캡처 시작 함수
+  const startCamera = async () => {
+    try {
+      setIsCapturing(true);
+      toast.info('카메라 준비 중...');
+      
+      // 백엔드에 카메라 시작 요청
+      const response = await fetch(`http://localhost:8182/api/camera/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('카메라 시작 요청 실패');
+      }
+  
+      
+      // 카메라 스트림 URL 설정
+      setCameraStreamUrl(`http://localhost:8182/api/camera/stream`);
+      setShowCameraPreview(true);
+      
+    } catch (error) {
+      console.error('카메라 접근 오류:', error);
+      toast.error('카메라에 접근할 수 없습니다.');
+      setIsCapturing(false);
+      setShowCameraPreview(false);
+    }
+  };
+  
+  // 카메라 중지 함수
+  const stopCamera = async () => {
+    try {
+      // 백엔드에 카메라 중지 요청
+      await fetch(`http://localhost:8182/api/camera/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      setShowCameraPreview(false);
+      setCameraStreamUrl("");
+      setIsCapturing(false);
+      
+    } catch (error) {
+      console.error('카메라 중지 오류:', error);
+      toast.error('카메라를 중지할 수 없습니다.');
+    }
+  };
+  
+  // 사진 촬영 함수
+  const capturePhoto = async () => {
+    try {
+      // 백엔드에 캡처 요청
+      const response = await fetch(`http://localhost:8182/api/camera/capture`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('사진 촬영 요청 실패');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // 사용자 메시지 추가
+        const userMessage: Message = {
+          id: Date.now().toString(),
+          sender: 'user',
+          text: "[사진을 전송했습니다]",
+          time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
+          image: data.image
+        };
+        
+        setMessages(prev => [...prev, userMessage]);
+        
+        // AI 응답 메시지 추가
+        setTimeout(() => {
+          const aiMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            sender: 'ai',
+            text: `사진 분석 결과: ${data.emotion} 감정이 감지되었습니다.`,
+            time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
+          };
+          setMessages(prev => [...prev, aiMessage]);
+        }, 1000);
+        
+        // 카메라 중지
+        await stopCamera();
+      } else {
+        toast.error(data.message || '사진 촬영에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('사진 촬영 오류:', error);
+      toast.error('사진 촬영에 실패했습니다.');
+    }
+  };
+  
   const handleSendMessage = () => {
     if (!inputMessage.trim()) return;
-    const newMessage: Message = {
+    
+    // 사용자 메시지 추가
+    const userMessage: Message = {
       id: Date.now().toString(),
       sender: "user",
       text: inputMessage,
       time: new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }),
     };
-    setMessages((prev) => [...prev, newMessage]);
+    
+    setMessages(prev => [...prev, userMessage]);
     setInputMessage("");
-    // AI 응답
+    
+    // 서버로 메시지 전송 및 응답 처리 (간단한 구현)
     setTimeout(() => {
-      const aiResponse: Message = {
+      const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         sender: "ai",
         text: "네 메시지 잘 받았어! 더 이야기해줘.",
-        time: new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }),
+        time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
       };
-      setMessages((prev) => [...prev, aiResponse]);
+      
+      setMessages(prev => [...prev, aiMessage]);
     }, 1000);
   };
-
-  // AI 응답을 백엔드로 전송
-  const sendAIResponseToBackend = async (response: Message) => {
-    try {
-      const res = await fetch("http://localhost:8181/api/ai-response", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: response.text,
-          sender: response.sender,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("AI 응답을 백엔드로 전송하는 데 실패했습니다.");
-      }
-
-      const data = await res.json();
-      console.log("백엔드 응답:", data.message);
-    } catch (error) {
-      console.error("AI 응답 전송 중 오류:", error);
-    }
-  };
-
-  // STT(음성) 메시지 전송 정광조 수정코드
-  const handleMicClick = async () => {
-    if (!isListening) {
-      // 녹음 시작
-      setIsListening(true);
-      await startRecording();
-    } else {
-      // 녹음 종료 및 하드코딩된 응답 출력
-      setIsListening(false);
-      setLoadingSTT(true);
-      const audioBlob = await stopRecording(); // 녹음 종료
-
-      try {
-        // 하드코딩된 사용자 응답 추가
-        const userMsg: Message = {
-          id: Date.now().toString(),
-          sender: "user",
-          text: "오늘은 좀 지치는 일이 많았어, 위로받고 싶은 하루이려나.", // 사용자 응답 하드코딩
-          time: new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }),
-        };
-        setMessages((prev) => [...prev, userMsg]);
-
-        // 하드코딩된 AI 응답 추가
-        const hardcodedResponse = "오늘도 애썼어. 충분히 잘 해냈으니, 지금은 편히 쉬도록 해~";
-        const aiMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          sender: "ai",
-          text: hardcodedResponse,
-          time: new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }),
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-
-        // 백엔드로 AI 응답 전송
-        await sendAIResponseToBackend(aiMsg);
-      } catch (error) {
-        alert("녹음 처리 중 오류가 발생했습니다.");
-      } finally {
-        setLoadingSTT(false);
-      }
-    }
-  };
-
-  // TTS로 하드코딩된 응답 재생
-  const playTTS = async (text: string) => {
-    try {
-      const formData = new FormData();
-      formData.append("text", text); // TTS로 변환할 텍스트 추가
-
-      const response = await fetch("http://localhost:8181/api/tts", {
-        method: "POST",
-        body: formData, // Form 데이터로 전달
-      });
-
-      if (!response.ok) {
-        throw new Error("TTS 오디오 파일을 가져오는 데 실패했습니다.");
-      }
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      // 오디오 재생
-      const audio = new Audio(audioUrl);
-      audio.play();
-    } catch (error) {
-      console.error("TTS 재생 중 오류:", error);
-      alert("TTS 오디오 파일을 가져오는 데 실패했습니다.");
-    }
-  };
-
+  
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-100">
+      {/* Left Sidebar */}
+      <div className="w-72 border-r bg-white hidden lg:block">
+        {/* Add left sidebar content here */}
+      </div>
+
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full border-x">
+      <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="py-3 px-4 bg-white border-b flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-8 w-8">
-              <img src="/example_avatar_profile.png" alt="AI Friend" className="w-full h-full object-cover" />
+        <header className="p-4 border-b bg-white flex items-center justify-between">
+          <div className="flex items-center">
+            <Avatar className="h-10 w-10">
+              {/* <img src="/example_avatar_profile.png" alt="AI Avatar" /> */}
+              <img src={aiImageUrl || "/example_avatar_profile.png"} alt="AI Avatar" />
             </Avatar>
-            <div>
-              <h1 className="text-sm">미나</h1>
-              <p className="text-[11px] text-green-600">활동중 상태</p>
+            <div className="ml-3">
+              <h2 className="font-medium">{aiName}</h2>
+              <p className="text-xs text-gray-500">활동중 상태</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 hover:bg-gray-100"
-              onClick={() => navigate("/chat/voicechat")}
-            >
-              <Phone className="h-5 w-5" />
-            </Button>
-            <Link to="/settings">
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-                <Settings className="h-5 w-5" />
-              </Button>
-            </Link>
+          <div className="flex items-center space-x-2">
+            <button className="p-2 rounded-full hover:bg-gray-100">
+              <Phone className="h-5 w-5 text-gray-500" />
+            </button>
+            <button className="p-2 rounded-full hover:bg-gray-100">
+              <Settings className="h-5 w-5 text-gray-500" />
+            </button>
           </div>
         </header>
+
         {/* Messages */}
-        <div className="flex-grow overflow-auto px-4 py-2 bg-gray-50">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`mb-4 flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
-            >
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map(message => (
+            <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
               {message.sender === "ai" && (
-                <Avatar className="h-8 w-8 shrink-0">
-                  <img src="/example_avatar_profile.png" alt="AI Friend" className="w-full h-full object-cover" />
-                </Avatar>
-              )}
-              <div className="flex flex-col max-w-[70%] mx-2">
-                <div
-                  className={`rounded-2xl p-3 ${message.sender === "user"
-                    ? "bg-blue-100 rounded-tr-none"
-                    : "bg-gray-100 rounded-tl-none"}`}
-                >
-                  <p className="text-sm text-gray-800">{message.text}</p>
-                  {message.image && (
-                    <div className="mt-2 rounded-lg overflow-hidden">
-                      <img src={message.image} alt="Shared image" className="w-full h-auto" />
-                    </div>
-                  )}
+                <div className="flex flex-col items-start mr-2">
+                  <Avatar className="h-8 w-8 mb-1">
+                    {/* <img src="/example_avatar_profile.png" alt="AI Avatar" /> */}
+                    <img src={aiImageUrl || "/example_avatar_profile.png"} alt="AI Avatar" />
+                  </Avatar>
+                  <span className="text-xs text-gray-500 ml-1">{aiName}</span>
                 </div>
-                <span className="text-[11px] text-gray-500 mt-1 mx-1">
+                )}
+              <div className={`max-w-[70%] ${message.sender === "user" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800"} rounded-2xl p-3 ${message.sender === "user" ? "rounded-tr-none" : "rounded-tl-none"}`}>
+                {message.image && (
+                  <div className="mb-2">
+                    <img 
+                      src={message.image} 
+                      alt="Captured" 
+                      className="rounded-lg max-w-full" 
+                    />
+                  </div>
+                )}
+                <p>{message.text}</p>
+                <span className="flex items-center justify-between mt-1 text-xs opacity-70">
                   {message.time}
                   {message.sender === "ai" && (
-                    <button
-                      className="ml-1 p-1 hover:bg-gray-200 rounded-full"
-                      onClick={() => playTTS(message.text)} // 백엔드에서 TTS 오디오 가져오기
-                      aria-label="음성 듣기"
-                      tabIndex={0}
-                    >
-                      <Volume2 className="h-4 w-4 text-gray-500" />
-                    </button>
-                  )}
-                </span>
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-        {/* Input Section */}
-        <div className="p-4 bg-white border-t">
-          <div className="flex items-center gap-2 relative">
-            <div className="flex-1 flex items-center bg-gray-100 rounded-full pr-2">
-              <Textarea
-                value={isListening ? "사용자 음성을 듣는 중입니다..." : inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder={isListening ? "사용자 음성을 듣는 중입니다..." : "메시지를 입력하세요..."}
-                className="resize-none min-h-[40px] max-h-24 bg-transparent flex-1 py-2 pl-4 pr-20 focus:outline-none"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !isListening) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                disabled={isListening || loadingSTT}
-                readOnly={isListening}
-              />
-              <div className="flex items-center gap-1">
-                <button
-                  className={`p-1 hover:bg-gray-200 rounded-full ${isListening ? "bg-blue-200" : ""}`}
-                  onClick={handleMicClick}
-                  disabled={loadingSTT}
-                  aria-label={isListening ? "음성 입력 종료" : "음성 입력 시작"}
+                  <button 
+                    className="ml-2 p-1 hover:bg-gray-300 rounded-full"
+                    onClick={async () => {
+                    try {
+                      // 음성 변환 요청
+                      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/tts`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ text: message.text })
+                      });
+
+                      if (!response.ok) {
+                        throw new Error('음성 변환 요청 실패');
+                      }
+
+                      // Create and play audio
+                      const audioBlob = await response.blob();
+                      const audioUrl = URL.createObjectURL(audioBlob);
+                      const audio = new Audio(audioUrl);
+                      
+                      // Cleanup after playback
+                      audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                      };
+
+                      await audio.play();
+                    } catch (error) {
+                      console.error('음성 재생 실패:', error);
+                    }
+                  }}
+                  aria-label="음성 듣기"
+                  tabIndex={0}
                 >
-                  <Mic className="h-5 w-5 text-gray-500" />
+                  <Volume2 className="h-4 w-4 text-gray-500" />
                 </button>
-                <button className="p-1 hover:bg-gray-200 rounded-full" disabled={isListening || loadingSTT}>
-                  <Camera className="h-5 w-5 text-gray-500" />
-                </button>
+              )}
+              </span>
               </div>
-            </div>
-            <Button
-              onClick={handleSendMessage}
-              className="shrink-0 h-10 w-10 rounded-full bg-blue-500 hover:bg-blue-600"
-              disabled={!inputMessage.trim() || isListening || loadingSTT}
-            >
-              <Send className="h-5 w-5 text-white" />
-            </Button>
           </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+
+
+      {/* Input Section */}
+      <div className="p-4 bg-white border-t">
+        <div className="flex items-center gap-2 relative">
+          <div className="flex-1 flex items-center bg-gray-100 rounded-full pr-2">
+            <Textarea
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              placeholder="메시지를 입력하세요..."
+              className="resize-none min-h-[40px] max-h-24 bg-transparent flex-1 py-2 pl-4 pr-20 focus:outline-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+            />
+            <div className="flex items-center gap-1">
+              <button className="p-1 hover:bg-gray-200 rounded-full">
+                <Mic className="h-5 w-5 text-gray-500" />
+              </button>
+              <button className="p-1 hover:bg-gray-200 rounded-full">
+                <Camera className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+          </div>
+          <Button 
+            onClick={handleSendMessage} 
+            className="shrink-0 h-10 w-10 rounded-full bg-blue-500 hover:bg-blue-600"
+            disabled={!inputMessage.trim()}
+          >
+            <Send className="h-5 w-5 text-white" />
+          </Button>
         </div>
-        {/* (하단 네비게이션, 사이드바 등 필요하면 추가) */}
+      </div>
+
+      {/* Bottom Navigation */}
+      <nav className="py-2 grid grid-cols-4 border-t bg-white">
+        <Link to="/signup" className="flex flex-col items-center justify-center">
+          <Home className="h-6 w-6 text-blue-500" />
+          <span className="text-[11px] text-blue-500 mt-1">홈</span>
+        </Link>
+        <button className="flex flex-col items-center justify-center">
+          <ImageIcon className="h-6 w-6 text-gray-400" />
+          <span className="text-[11px] text-gray-400 mt-1">앨범</span>
+        </button>
+        <button className="flex flex-col items-center justify-center">
+          <Heart className="h-6 w-6 text-gray-400" />
+          <span className="text-[11px] text-gray-400 mt-1">추억</span>
+        </button>
+      </nav>
+      </div>
+
+      {/* Right Sidebar */}
+      <div className="w-72 border-l bg-white hidden lg:block">
+        {/* Add right sidebar content here */}
       </div>
     </div>
   );
