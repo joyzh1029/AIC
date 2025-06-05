@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { Home, Image as ImageIcon, Heart, User, Send, Phone, Settings, Mic, Camera, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 
+
 interface Message {
   id: string;
   sender: "user" | "ai";
@@ -15,31 +16,92 @@ interface Message {
   voice?: string;
 }
 
-const ChatPage = () => {
-  const [messages, setMessages] = useState<Message[]>([
+// const ChatPage = () => {
+//   const [messages, setMessages] = useState<Message[]>([
+//     {
+//       id: "1",
+//       sender: "ai",
+//       text: "안녕, 오늘 만나서 반가워! 나는 너의 AI 친구미나야, 어떻게지내고있어?",
+//       time: "오전 10:23",
+//     },
+//   ]);
+  
+//   const [inputMessage, setInputMessage] = useState("");
+//   const [isCapturing, setIsCapturing] = useState(false);
+//   const [showCameraPreview, setShowCameraPreview] = useState(false);
+//   const [cameraStreamUrl, setCameraStreamUrl] = useState("");
+//   const videoRef = useRef<HTMLVideoElement>(null);
+//   const canvasRef = useRef<HTMLCanvasElement>(null);
+//   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+//   const scrollToBottom = () => {
+//     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+//   };
+  
+//   useEffect(() => {
+//     scrollToBottom();
+//   }, [messages]);
+  const ChatPage = () => {
+    // const [messages, setMessages] = useState<Message[]>([
+    //   {
+    //     id: "1",
+    //     sender: "ai",
+    //     text: "안녕, 오늘 만나서 반가워! 나는 너의 AI 친구 미나야, 어떻게지내고있어?",
+    //     time: "오전 10:23",
+    //   },
+    // ]);
+    
+    const [inputMessage, setInputMessage] = useState("");
+    const [aiImageUrl, setAiImageUrl] = useState(""); // ✅ 이미지 상태 추가
+    const [isCapturing, setIsCapturing] = useState(false);
+    const [showCameraPreview, setShowCameraPreview] = useState(false);
+    const [cameraStreamUrl, setCameraStreamUrl] = useState("");
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const scrollToBottom = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+      scrollToBottom();
+    }, [messages]);
+
+    useEffect(() => {
+      const savedUrl = localStorage.getItem("my-ai-image"); // ✅ localStorage에서 불러오기
+      if (savedUrl) {
+        setAiImageUrl(savedUrl);
+      }
+    }, []);
+
+  const [aiName, setAiName] = useState(""); // 기본값
+
+  useEffect(() => {
+    const savedUrl = localStorage.getItem("my-ai-image");
+    if (savedUrl) setAiImageUrl(savedUrl);
+
+    const savedName = localStorage.getItem("my-ai-name");
+    if (savedName) setAiName(savedName); // 닉네임 불러오기
+  }, []);
+
+    useEffect(() => {
+  const savedName = localStorage.getItem("my-ai-name") || "미나";
+
+  setMessages([
     {
-      id: "1",
+      id: Date.now().toString(),
       sender: "ai",
-      text: "안녕, 오늘 만나서 반가워! 나는 너의 AI 친구미나야, 어떻게지내고있어?",
-      time: "오전 10:23",
+      text: `안녕, 오늘 만나서 반가워! 나는 너의 AI 친구 ${savedName}야, 어떻게 지내고 있어?`,
+      time: new Date().toLocaleTimeString("ko-KR", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
     },
   ]);
-  
-  const [inputMessage, setInputMessage] = useState("");
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [showCameraPreview, setShowCameraPreview] = useState(false);
-  const [cameraStreamUrl, setCameraStreamUrl] = useState("");
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-  
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+}, []);
+
   
   // 카메라 캡처 시작 함수
   const startCamera = async () => {
@@ -58,6 +120,7 @@ const ChatPage = () => {
       if (!response.ok) {
         throw new Error('카메라 시작 요청 실패');
       }
+  
       
       // 카메라 스트림 URL 설정
       setCameraStreamUrl(`http://localhost:8182/api/camera/stream`);
@@ -162,7 +225,7 @@ const ChatPage = () => {
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         sender: "ai",
-        text: `"${inputMessage}"에 대한 응답입니다. 저는 AI 친구 미나입니다.`,
+        text: `"${inputMessage}"에 대한 응답입니다. 저는 AI 친구 ${aiName || "미나"}입니다.`,
         time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
       };
       
@@ -183,10 +246,11 @@ const ChatPage = () => {
         <header className="p-4 border-b bg-white flex items-center justify-between">
           <div className="flex items-center">
             <Avatar className="h-10 w-10">
-              <img src="/example_avatar_profile.png" alt="AI Avatar" />
+              {/* <img src="/example_avatar_profile.png" alt="AI Avatar" /> */}
+              <img src={aiImageUrl || "/example_avatar_profile.png"} alt="AI Avatar" />
             </Avatar>
             <div className="ml-3">
-              <h2 className="font-medium">미나</h2>
+              <h2 className="font-medium">{aiName}</h2>
               <p className="text-xs text-gray-500">활동중 상태</p>
             </div>
           </div>
@@ -205,10 +269,14 @@ const ChatPage = () => {
           {messages.map(message => (
             <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
               {message.sender === "ai" && (
-                <Avatar className="h-8 w-8 mr-2 mt-1">
-                  <img src="/example_avatar_profile.png" alt="AI Avatar" />
-                </Avatar>
-              )}
+                <div className="flex flex-col items-start mr-2">
+                  <Avatar className="h-8 w-8 mb-1">
+                    {/* <img src="/example_avatar_profile.png" alt="AI Avatar" /> */}
+                    <img src={aiImageUrl || "/example_avatar_profile.png"} alt="AI Avatar" />
+                  </Avatar>
+                  <span className="text-xs text-gray-500 ml-1">{aiName}</span>
+                </div>
+                )}
               <div className={`max-w-[70%] ${message.sender === "user" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800"} rounded-2xl p-3 ${message.sender === "user" ? "rounded-tr-none" : "rounded-tl-none"}`}>
                 {message.image && (
                   <div className="mb-2">
