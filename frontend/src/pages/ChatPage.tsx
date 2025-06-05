@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Home, Image as ImageIcon, Heart, User, Send, Phone, Settings, Mic, Camera, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,6 +16,7 @@ interface Message {
 }
 
 const ChatPage = () => {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -297,8 +298,12 @@ const ChatPage = () => {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <button className="p-2 rounded-full hover:bg-gray-100">
-              <Phone className="h-5 w-5 text-gray-500" />
+            <button 
+              onClick={() => navigate('/realtime-chat')} 
+              className="p-2 rounded-full hover:bg-blue-100 transition duration-300 ease-in-out"
+              title="실시간 음성 채팅으로 전환"
+            >
+              <Phone className="h-5 w-5 text-blue-500" />
             </button>
             <button className="p-2 rounded-full hover:bg-gray-100">
               <Settings className="h-5 w-5 text-gray-500" />
@@ -426,7 +431,11 @@ const ChatPage = () => {
               }}
             />
             <div className="flex items-center gap-1">
-              <button className="p-1 hover:bg-gray-200 rounded-full">
+              <button 
+                className="p-1 hover:bg-gray-200 rounded-full transition-all duration-300 hover:bg-blue-100 hover:text-blue-600"
+                onClick={() => navigate('/realtime-chat')}
+                title="실시간 음성 채팅으로 전환"
+              >
                 <Mic className="h-5 w-5 text-gray-500" />
               </button>
               <button 
