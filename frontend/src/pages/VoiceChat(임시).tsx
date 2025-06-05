@@ -1,3 +1,5 @@
+// 오류로 인해 임시로 파일명 변경,import 안함. 사용시 코드변경 필요
+
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, PhoneOff, AlertCircle } from "lucide-react";
