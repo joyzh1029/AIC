@@ -1,0 +1,22 @@
+# 1. Python 3.10 기반 CUDA 11.8 (torch==2.7.0+cu118 용)
+FROM pytorch/pytorch:2.7.0-cuda11.8-cudnn9-runtime
+
+# 2. 작업 디렉토리 생성
+WORKDIR /app
+
+# 3. 필요 파일 복사 (dockerignore로 필요 없는 것들은 자동 무시됨)
+COPY . /app
+
+# 4. 시스템 패키지 설치 (ffmpeg, libsndfile1 등 필요 없으면 빼도 됨)
+RUN apt-get update && \
+    rm -rf /var/lib/apt/lists/*
+
+# 5. pip 최신화 및 의존성 설치
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# 6. FastAPI 기본 포트 (필요에 따라 수정)
+EXPOSE 8000
+
+# 7. 서버 실행 명령 (파일명/앱 객체에 맞게 수정)
+CMD ["uvicorn", "run_server:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
