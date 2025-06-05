@@ -8,8 +8,6 @@ import axios from "axios"; // 추가
 
 // 后端API基础URL
 const API_BASE_URL = "http://localhost:8181";
-// 后端API基础URL
-const API_BASE_URL = "http://localhost:8181";
 
 const CreateAiFriend = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -125,18 +123,24 @@ const CreateAiFriend = () => {
         localStorage.setItem("my-ai-name", name.trim());
       }
 
-    } else {
-      setGeneratedImage(previewUrl || "");
-      if (previewUrl) {
-        localStorage.setItem("my-ai-image", previewUrl);
+      } else {
+        setGeneratedImage(previewUrl || "");
+        if (previewUrl) {
+          localStorage.setItem("my-ai-image", previewUrl);
+        }
+  
+        // ✅ 닉네임 저장 추가
+        if (name.trim()) {
+          localStorage.setItem("my-ai-name", name.trim());
+        }
       }
-
-      // ✅ 닉네임 저장 추가
-      if (name.trim()) {
-        localStorage.setItem("my-ai-name", name.trim());
-      }
+    } catch (error) {
+      console.error('Failed to generate AI friend:', error);
+      setResult("업로드 실패: " + (error as any).message);
+    } finally {
+      setIsGenerating(false);
     }
-
+  
     // Otherwise, generate new AI friend
     if (!selectedFile) return;
     
