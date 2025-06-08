@@ -132,7 +132,10 @@ async def root():
             "/api/schedule/tts",
             "/api/avatar",
             "/api/camera",
-            "/api/emotion"
+            "/api/emotion",
+            "/api/search/chat",
+            "/api/search/health",
+            "/api/search/suggest"
         ]
     }
 
