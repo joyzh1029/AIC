@@ -2,74 +2,122 @@ import os
 import sys
 import logging
 from pathlib import Path
-from logging.handlers import RotatingFileHandler
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 # 환경 변수 로드
 load_dotenv()
 
-# 현재 디렉토리를 Python 경로에 추가 (상대 경로 임포트를 위함)
+# --- Logging Configuration ---
+logging.basicConfig(
+    level=logging.INFO,  # Default level, change to logging.DEBUG for more verbosity
+    format="%(asctime)s - %(name)s - [%(levelname)s] - %(message)s (%(filename)s:%(lineno)d)",
+    handlers=[
+        logging.StreamHandler()  # Ensures logs go to the console
+    ]
+)
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
+logger.info("Logging configured.")
+
+# Add current directory to Python path for relative imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI, Request, Response
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-
-# 중앙 집중식 라우팅 관리 모듈 가져오기
-from app.routers import api_router
-
 # 코어 모듈 임포트
-from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
+try:
+    from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
+    logger.info("Core startup modules imported successfully")
+except ImportError:
+    logger.warning("Core startup modules not found or incomplete")
+    initialize_models = start_background_threads = initialize_directories = shutdown_threads = None
+
+# WebSocket 라우터 가져오기
+try:
+    # 새 버전 구조화된 라우터
+    from app.websocket import websocket_router
+    logger.info("WebSocket router imported successfully.")
+except ImportError:
+    logger.warning("WebSocket router not found")
+    websocket_router = None
+
+# API 라우터 가져오기
+try:
+    from app.routers import api_router
+    logger.info("API router imported successfully.")
+except ImportError:
+    logger.warning("API router not found")
+    api_router = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 시작 시 작업
-    print("AI Companion API 서버 시작 중...")
+    logger.info("AI Companion API 서버 시작 중...")
+    if initialize_directories:
+        BASE_DIR = initialize_directories()
+        logger.info(f"Directories initialized at {BASE_DIR}")
     
-    # 모델 로딩
-    global processor, vlm_model, device, whisper_model
-    processor, vlm_model, device, whisper_model = initialize_models()
-    
-    # 분석 스레드 시작
-    global analyzer
-    analyzer = start_background_threads(vlm_model, processor, device, whisper_model)
+    # 모델과 스레드 초기화
+    if initialize_models and start_background_threads:
+        try:
+            # 모델 초기화 및 반환값 저장
+            processor, vlm_model, device, whisper_model = initialize_models()
+            logger.info("Models initialized successfully")
+            
+            # 반환받은 모델로 스레드 시작
+            analyzer = start_background_threads(vlm_model, processor, device, whisper_model)
+            logger.info("Background threads started")
+        except Exception as e:
+            logger.error(f"Error initializing models or threads: {str(e)}")
+    else:
+        logger.warning("Model initialization or thread starting functions not available")
     
     yield
     
     # 종료 시 작업
-    print("서버 종료 중...")
-    # 스레드 종료 이벤트 설정
-    shutdown_threads()
+    logger.info("서버 종료 중...")
+    if shutdown_threads:
+        try:
+            shutdown_threads()
+            logger.info("Background threads shutdown successfully")
+        except Exception as e:
+            logger.error(f"Error shutting down threads: {str(e)}")
 
-# FastAPI 앱 초기화
+# FastAPI application
+# FastAPI 애플리케이션 설정
 app = FastAPI(
-    title="AIC API",
-    description="AI Companion Backend API with Schedule Management",
+    title="AI Companion API",
+    description="AI Companion Backend API with Schedule Management and Realtime Chat",
     version="1.0.0",
     lifespan=lifespan
 )
 
-# CORS 미들웨어 추가
+# CORS 미들웨어 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 프로덕션에서는 특정 도메인 설정 필요
+    allow_origins=["*"],  # 프로덕션에서는 특정 도메인으로 제한 필요
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 디렉토리 초기화
-BASE_DIR = initialize_directories()
+# 정적 파일 설정
+if initialize_directories:
+    BASE_DIR = initialize_directories()
+    # 정적 파일 서비스 설정 (업로드된 파일과 생성된 아바타 접근용)
+    app.mount("/uploads", StaticFiles(directory=str(BASE_DIR / "uploads")), name="uploads")
 
-# 정적 파일 서비스 설정 (업로드된 파일과 생성된 아바타 접근용)
-app.mount("/uploads", StaticFiles(directory=str(BASE_DIR / "uploads")), name="uploads")
+# 라우터 등록
+if websocket_router:
+    app.include_router(websocket_router)
 
-# 모든 라우트 등록 (일괄 등록)
-app.include_router(api_router)
+if api_router:
+    app.include_router(api_router)
 
-# 루트 경로 및 헬스체크 엔드포인트
 @app.get("/")
 async def root():
     return {
@@ -101,6 +149,7 @@ async def health_check():
 
 # 이전 이벤트 핸들러는 lifespan 컨텍스트 매니저로 대체되었습니다
 
+# 애플리케이션 직접 실행 시
 if __name__ == "__main__":
     import uvicorn
     
@@ -111,6 +160,7 @@ if __name__ == "__main__":
     
     # FastAPI 앱 실행
     print("🚀 서버 시작 - http://localhost:8181")
+    logger.info("Starting AI Companion API server...")
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
