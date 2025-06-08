@@ -25,8 +25,8 @@ class Settings(BaseSettings):
 settings = Settings()
 
 #검증 (선택 사항)
-print(f"불러온 Group ID: {settings.minimax_group_id}")
-print(f"불러온 API Key: {settings.minimax_api_key}")
-print(f"WebSocket Base URL: {settings.minimax_ws_realtime_base_url}")
-print(f"WebSocket 기본 모델: {settings.minimax_ws_default_model}")
+#print(f"불러온 Group ID: {settings.minimax_group_id}")
+#print(f"불러온 API Key: {settings.minimax_api_key}")
+#print(f"WebSocket Base URL: {settings.minimax_ws_realtime_base_url}")
+#print(f"WebSocket 기본 모델: {settings.minimax_ws_default_model}")
 

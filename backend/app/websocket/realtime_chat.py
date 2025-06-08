@@ -55,14 +55,14 @@ class ConnectionManager:
             model = settings.minimax_ws_default_model
         
         url = f"{settings.minimax_ws_realtime_base_url}?model={model}"
-        headers = {
-            "Authorization": f"Bearer {settings.minimax_api_key}"
-        }
+        headers = [
+            ("Authorization", f"Bearer {settings.minimax_api_key}")
+        ]
         
         try:
             minimax_ws = await websockets.connect(
                 url,
-                extra_headers=headers,
+                additional_headers=headers, 
                 ping_interval=20,
                 ping_timeout=10
             )
