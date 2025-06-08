@@ -1,0 +1,27 @@
+# Git commands to upload changes to zhouying_RealtimeVoice branch
+
+# 1. Check current status
+git status
+
+# 2. Add all modified files
+git add backend/app/websocket/realtime_chat.py
+git add frontend/src/pages/RealtimeChat.tsx
+git add backend/test_base64_chunking.py
+
+# 3. Commit the changes
+git commit -m "🔧 Fix WebSocket Base64 audio chunking issue
+
+- Fixed Base64 chunking to preserve 4-character boundary integrity
+- Added validation for each chunk before transmission  
+- Enhanced frontend chunk reassembly with proper validation
+- Added comprehensive test script for chunking logic
+- Resolved 'InvalidCharacterError' when decoding large audio files
+- Large audio files (>800KB) now transmit successfully via WebSocket
+
+Fixes: Audio welcome message playback failure due to corrupted Base64 data"
+
+# 4. Push to the remote branch
+git push origin zhouying_RealtimeVoice
+
+# Alternative: If you need to set upstream branch
+git push --set-upstream origin zhouying_RealtimeVoice 
