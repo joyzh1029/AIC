@@ -13,30 +13,12 @@ import ChatPage from "./pages/ChatPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import RealtimeChat from "./pages/RealtimeChat";
+import GeminiSearchAgent from "./pages/GeminiSearchAgent";
 import { UserProvider } from "@/contexts/UserContext";
-import { useStream } from "@langchain/langgraph-sdk/react";
-
-interface Message {
-  id: string;
-  content: string;
-  role: string;
-  timestamp?: string;
-}
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  const thread = useStream<{
-    messages: Message[];
-    initial_search_query_count: number;
-    max_research_loops: number;
-    reasoning_model: string;
-  }>({
-    apiUrl: import.meta.env.DEV
-      ? "http://localhost:2024"
-      : undefined,
-    assistantId: "agent",
-  });
 
   return (
     <UserProvider>      
@@ -54,6 +36,7 @@ const App = () => {
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/realtime-chat" element={<RealtimeChat />} />
+                <Route path="/gemini-search" element={<GeminiSearchAgent />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
