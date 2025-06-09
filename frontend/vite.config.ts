@@ -9,8 +9,15 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     proxy: {
+      // Proxy search requests to the backend server
+      "/app/search": {
+        target: "http://127.0.0.1:2024", // Updated to match your backend port
+        changeOrigin: true,
+        // Optionally rewrite path if needed (e.g., remove /app prefix if backend doesn't expect it)
+        // rewrite: (path) => path.replace(/^\/app/, ''),
+      },
       '/api': {
-        target: 'http://localhost:8182',
+        target: 'http://localhost:8181',
         changeOrigin: true,
         secure: false,
       },

@@ -194,14 +194,14 @@ const ChatPage = () => {
       // 메시지 타입에 따라 다른 엔드포인트 사용
       if (messageType === "schedule") {
         console.log('일정 관련 메시지 감지:', inputMessage);
-        endpoint = "http://localhost:8181/api/schedule/chat";
+        endpoint = "/api/schedule/chat";
         requestBody = {
           user_id: 'user-1',
           text: inputMessage,
         };
       } else if (messageType === "search") {
         console.log('검색 요청 감지:', inputMessage);
-        endpoint = "http://localhost:8181/api/search/chat";
+        endpoint = "/app/search";
         requestBody = {
           user_id: 'user-1',
           text: inputMessage,
@@ -220,7 +220,7 @@ const ChatPage = () => {
         
       } else {
         console.log('일반 채팅 메시지 감지:', inputMessage);
-        endpoint = "http://localhost:8181/api/chat";
+        endpoint = "/api/chat";
         requestBody = {
           messages: [{
             role: 'user',
