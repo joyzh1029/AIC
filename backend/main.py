@@ -3,6 +3,7 @@ import sys
 import logging
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
+import asyncio
 
 # 현재 디렉토리를 Python 경로에 추가 (상대 경로 임포트를 위함)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,16 +15,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # 중앙 집중식 라우팅 관리 모듈 가져오기
 from app.routers import api_router
+# 모델 관련 함수들 임포트
+from app.models.models import initialize_models, shutdown_threads
 
-# 코어 모듈 임포트
-from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
-
-# FastAPI 앱 초기화
-app = FastAPI(
-    title="AIC API",
-    description="AI Companion Backend API",
-    version="1.0.0"
-)
+app = FastAPI()
+app.include_router(api_router)
 
 # CORS 미들웨어 추가
 app.add_middleware(
@@ -34,14 +30,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def initialize_directories() -> Path:
+    """
+    필요한 디렉토리들을 생성하고 기본 경로를 반환하는 함수
+    """
+    # 프로젝트 루트 디렉토리
+    base_dir = Path(__file__).resolve().parent
+
+    # 필요한 디렉토리들 생성
+    directories = [
+        base_dir / "uploads",          # 업로드된 파일 저장
+        base_dir / "uploads" / "avatars",  # 아바타 이미지 저장
+        base_dir / "uploads" / "audio",    # 오디오 파일 저장
+    ]
+
+    for directory in directories:
+        directory.mkdir(parents=True, exist_ok=True)
+
+    return base_dir
+
 # 디렉토리 초기화
 BASE_DIR = initialize_directories()
 
 # 정적 파일 서비스 설정 (업로드된 파일과 생성된 아바타 접근용)
 app.mount("/uploads", StaticFiles(directory=str(BASE_DIR / "uploads")), name="uploads")
-
-# 모든 라우트 등록 (일괄 등록)
-app.include_router(api_router)
 
 # 루트 경로 및 헬스체크 엔드포인트
 @app.get("/")
@@ -60,22 +72,33 @@ async def health_check():
 # FastAPI 앱 실행 (uvicorn에서 실행할 때 사용)
 @app.on_event("startup")
 async def startup_event():
-    # 모델 로딩
-    global processor, vlm_model, device, whisper_model
-    processor, vlm_model, device, whisper_model = initialize_models()
+    print("🔧 모델 로딩 중...")
     
-    # 분석 스레드 시작
-    global analyzer
-    analyzer = start_background_threads(vlm_model, processor, device, whisper_model)
+    # 비동기 모델 로딩 함수
+    async def load_models_async():
+        global processor, vlm_model, device, whisper_model
+        try:
+            processor, vlm_model, device, whisper_model = await asyncio.to_thread(initialize_models)
+            print("✅ 모델 로딩 완료")
+        except Exception as e:
+            print(f"❌ 모델 로딩 실패: {str(e)}")
+            raise
+    
+    # 백그라운드 태스크로 실행
+    asyncio.create_task(load_models_async())
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    # 스레드 종료 이벤트 설정
-    shutdown_threads()
+    try:
+        # 스레드 종료 이벤트 설정
+        shutdown_threads()
+        print("✅ 서버 종료 완료")
+    except Exception as e:
+        print(f"❌ 서버 종료 중 오류: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
     
     # FastAPI 앱 실행
-    print("🚀 서버 시작 - http://localhost:8181")
-    uvicorn.run(app, host="0.0.0.0", port=8181)
+    print("🚀 서버 시작 - http://localhost:8183")
+    uvicorn.run(app, host="0.0.0.0", port=8183)

@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 import axios from "axios";
 
 // 后端API基础URL
-const API_BASE_URL = "http://localhost:8181";
+const API_BASE_URL = "http://localhost:8183";
 
 const CreateAiFriend = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -46,47 +46,7 @@ const CreateAiFriend = () => {
     setResult(null);
 
     try {
-      // Step 1: Generate AI friend via old endpoint (8183)
-      const formData1 = new FormData();
-      formData1.append("image", selectedFile);
-
-      const response = await axios.post(
-        "http://localhost:8183/wanna-image/",
-        formData1,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-
-      if (response.data?.image_url) {
-        const imageUrl = response.data.image_url;
-        setGeneratedImage(imageUrl);
-        localStorage.setItem("my-ai-image", imageUrl);
-
-        if (name.trim()) {
-          localStorage.setItem("my-ai-name", name.trim());
-        }
-      } else if (response.data?.base64_image) {
-        const base64Url = `data:image/png;base64,${response.data.base64_image}`;
-        setGeneratedImage(base64Url);
-        localStorage.setItem("my-ai-image", base64Url);
-
-        if (name.trim()) {
-          localStorage.setItem("my-ai-name", name.trim());
-        }
-      } else {
-        setGeneratedImage(previewUrl || "");
-        if (previewUrl) {
-          localStorage.setItem("my-ai-image", previewUrl);
-        }
-        if (name.trim()) {
-          localStorage.setItem("my-ai-name", name.trim());
-        }
-      }
-
-      // Step 2: 업로드/생성 (8181)
+      // Step 1: 업로드 (8181)
       const formData2 = new FormData();
       formData2.append('file', selectedFile);
       formData2.append('user_id', user?.uid || 'default_user');
@@ -101,6 +61,7 @@ const CreateAiFriend = () => {
         throw new Error('Failed to upload photo');
       }
 
+      // Step 2: 생성 (8181)
       const generateData = new FormData();
       generateData.append('file_path', uploadResponse.data.file_path);
       generateData.append('user_id', user?.uid || 'default_user');

@@ -233,6 +233,111 @@ interface Message {
     }, 1000);
   };
   
+  // STT 관련 상태 추가
+const [isRecording, setIsRecording] = useState(false);
+const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+
+// 녹음 시작 함수
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+    
+    setIsRecording(true);
+    setAudioChunks([]);
+    setMediaRecorder(recorder);
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        setAudioChunks(prev => [...prev, e.data]);
+      }
+    };
+
+    // STT 녹음 중지 핸들러 수정
+    recorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('audio', audioBlob);
+
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/audio/stt`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) throw new Error('STT 처리 실패');
+
+        const { result } = await response.json();
+        setInputMessage(result);
+      } catch (error) {
+        console.error('STT 에러:', error);
+        toast.error('음성 인식에 실패했습니다.');
+      }
+    };
+
+    recorder.start();
+  } catch (error) {
+    console.error('마이크 접근 오류:', error);
+    toast.error('마이크에 접근할 수 없습니다.');
+  }
+};
+
+// 녹음 중지 함수
+const stopRecording = () => {
+  if (mediaRecorder && isRecording) {
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    setIsRecording(false);
+  }
+};
+
+// 마이크 버튼 클릭 핸들러 수정
+const handleMicClick = () => {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+};
+
+// API URL 상수 정의 (파일 상단)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8183';
+
+// TTS 재생 함수 수정
+const playTTS = async (text: string) => {
+  try {
+    const response = await fetch(`${API_URL}/api/audio/tts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        text,
+        speaker: "ko"
+      })
+    });
+
+    if (!response.ok) {
+      console.error('TTS 응답 상태:', response.status);
+      throw new Error('음성 변환 요청 실패');
+    }
+
+    const audioBlob = await response.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
+    
+    audio.onended = () => {
+      URL.revokeObjectURL(audioUrl);
+    };
+
+    await audio.play();
+  } catch (error) {
+    console.error('음성 재생 실패:', error);
+    toast.error('음성 재생에 실패했습니다.');
+  }
+};
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Left Sidebar */}
@@ -294,40 +399,42 @@ interface Message {
                   <button 
                     className="ml-2 p-1 hover:bg-gray-300 rounded-full"
                     onClick={async () => {
-                    try {
-                      // 음성 변환 요청
-                      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/tts`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ text: message.text })
-                      });
+                      try {
+                        // API_URL 사용하도록 수정
+                        const response = await fetch(`${API_URL}/api/audio/tts`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ 
+                            text: message.text,
+                            speaker: "ko"
+                          })
+                        });
 
-                      if (!response.ok) {
-                        throw new Error('음성 변환 요청 실패');
+                        if (!response.ok) {
+                          console.error('TTS 응답 상태:', response.status);
+                          throw new Error('음성 변환 요청 실패');
+                        }
+
+                        const audioBlob = await response.blob();
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        const audio = new Audio(audioUrl);
+                        
+                        audio.onended = () => {
+                          URL.revokeObjectURL(audioUrl);
+                        };
+
+                        await audio.play();
+                      } catch (error) {
+                        console.error('음성 재생 실패:', error);
+                        toast.error('음성 재생에 실패했습니다.');
                       }
-
-                      // Create and play audio
-                      const audioBlob = await response.blob();
-                      const audioUrl = URL.createObjectURL(audioBlob);
-                      const audio = new Audio(audioUrl);
-                      
-                      // Cleanup after playback
-                      audio.onended = () => {
-                        URL.revokeObjectURL(audioUrl);
-                      };
-
-                      await audio.play();
-                    } catch (error) {
-                      console.error('음성 재생 실패:', error);
-                    }
-                  }}
-                  aria-label="음성 듣기"
-                  tabIndex={0}
-                >
-                  <Volume2 className="h-4 w-4 text-gray-500" />
-                </button>
+                    }}
+                    aria-label="음성으로 듣기"
+                  >
+                    <Volume2 className="h-4 w-4 text-gray-500" />
+                  </button>
               )}
               </span>
               </div>
@@ -388,9 +495,13 @@ interface Message {
               }}
             />
             <div className="flex items-center gap-1">
-              <button className="p-1 hover:bg-gray-200 rounded-full">
-                <Mic className="h-5 w-5 text-gray-500" />
-              </button>
+              {/* 마이크 버튼 UI */}
+<button 
+  className={`p-1 hover:bg-gray-200 rounded-full ${isRecording ? 'bg-red-500' : ''}`}
+  onClick={handleMicClick}
+>
+  <Mic className={`h-5 w-5 ${isRecording ? 'text-white' : 'text-gray-500'}`} />
+</button>
               <button 
                 className="p-1 hover:bg-gray-200 rounded-full" 
                 onClick={startCamera}

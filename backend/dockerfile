@@ -16,7 +16,7 @@ RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # 6. FastAPI 기본 포트 (필요에 따라 수정)
-EXPOSE 8000
+EXPOSE 8183
 
 # 7. 서버 실행 명령 (파일명/앱 객체에 맞게 수정)
 CMD ["python", "run_server.py"]

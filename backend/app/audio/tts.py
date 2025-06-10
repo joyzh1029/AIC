@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form
+from fastapi import Form, HTTPException
 from fastapi.responses import FileResponse
 import json
 from typing import Iterator
@@ -7,6 +7,8 @@ import os
 import tempfile
 import glob
 from dotenv import load_dotenv
+import httpx
+from pydantic import BaseModel
 
 # .env에서 환경변수 불러오기
 load_dotenv()
@@ -14,11 +16,9 @@ MINIMAX_GROUP_ID = os.getenv("MINIMAX_GROUP_ID")
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 MINIMAX_TTS_URL = f"https://api.minimax.chat/v1/t2a_v2?GroupId={MINIMAX_GROUP_ID}"
 
-# FastAPI 라우터 객체 생성
-router = APIRouter(
-    prefix="/api",     # 실제 엔드포인트에 맞춰 수정
-    tags=["tts"]       # Swagger 등 문서에서 tts 그룹으로 표시
-)
+class TTSRequest(BaseModel):
+    text: str
+    speaker: str = "ko"
 
 def build_tts_stream_headers() -> dict:
     """Minimax TTS API 호출을 위한 헤더 생성 함수"""
@@ -77,24 +77,23 @@ def cleanup_old_files(directory=".", pattern="output_*.mp3", max_files=50):
             except Exception as e:
                 print(f"파일 삭제 실패: {file} ({e})")
 
-@router.post("/tts")
-async def tts_api(text: str = Form(...)):
+async def text_to_speech(text: str = Form(...)):
     """
-    프론트엔드에서 전송한 텍스트를 TTS로 변환해 mp3 파일로 반환하는 엔드포인트.
-    1. 임시 mp3 파일 생성
-    2. 파일이 50개 초과하면 오래된 것부터 삭제
-    3. mp3 파일을 FileResponse로 반환
+    프론트엔드에서 전송한 텍스트를 TTS로 변환해 mp3 파일로 반환
     """
-    # 임시 파일로 mp3 저장
-    with tempfile.NamedTemporaryFile(delete=False, prefix="output_", suffix=".mp3") as temp_file:
-        temp_file_path = temp_file.name
-        audio = b""
-        for chunk in call_tts_stream(text):
-            if chunk and chunk != '\n':
-                decoded_hex = bytes.fromhex(chunk)
-                audio += decoded_hex
-        temp_file.write(audio)
-    # mp3 파일이 50개 초과 시 오래된 파일 자동 삭제
-    cleanup_old_files(directory=".", pattern="output_*.mp3", max_files=50)
-    # mp3 파일 반환
-    return FileResponse(temp_file_path, media_type="audio/mp3", filename=os.path.basename(temp_file_path))
+    try:
+        # 임시 파일로 mp3 저장
+        with tempfile.NamedTemporaryFile(delete=False, prefix="output_", suffix=".mp3") as temp_file:
+            temp_file_path = temp_file.name
+            audio = b""
+            for chunk in call_tts_stream(text):
+                if chunk and chunk != '\n':
+                    decoded_hex = bytes.fromhex(chunk)
+                    audio += decoded_hex
+            temp_file.write(audio)
+        # mp3 파일이 50개 초과 시 오래된 파일 자동 삭제
+        cleanup_old_files(directory=".", pattern="output_*.mp3", max_files=50)
+        # mp3 파일 반환
+        return FileResponse(temp_file_path, media_type="audio/mp3", filename=os.path.basename(temp_file_path))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS 변환 실패: {str(e)}")

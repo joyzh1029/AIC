@@ -111,3 +111,4 @@ uvicorn[standard]
 python-dotenv
 pydantic
 openai
+python-multipart
