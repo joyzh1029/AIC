@@ -256,17 +256,21 @@ const startRecording = async () => {
 
     // STT 녹음 중지 핸들러 수정
     recorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      const formData = new FormData();
-      formData.append('audio', audioBlob);
-
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/audio/stt`, {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+
+        const response = await fetch(`${API_URL}/api/audio/stt`, {
           method: 'POST',
-          body: formData
+          body: formData,
+          credentials: 'include'  // CORS 인증 추가
         });
 
-        if (!response.ok) throw new Error('STT 처리 실패');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'STT 처리 실패');
+        }
 
         const { result } = await response.json();
         setInputMessage(result);
@@ -400,21 +404,21 @@ const playTTS = async (text: string) => {
                     className="ml-2 p-1 hover:bg-gray-300 rounded-full"
                     onClick={async () => {
                       try {
-                        // API_URL 사용하도록 수정
                         const response = await fetch(`${API_URL}/api/audio/tts`, {
                           method: 'POST',
                           headers: {
-                            'Content-Type': 'application/json',
+                            'Content-Type': 'application/json', // JSON 형식으로 전송
                           },
                           body: JSON.stringify({ 
-                            text: message.text,
-                            speaker: "ko"
+                            text: message.text,  // 텍스트 내용
+                            speaker: "ko"        // 한국어 음성 지정
                           })
                         });
 
                         if (!response.ok) {
                           console.error('TTS 응답 상태:', response.status);
-                          throw new Error('음성 변환 요청 실패');
+                          const errorData = await response.json();
+                          throw new Error(errorData.detail || '음성 변환 요청 실패');
                         }
 
                         const audioBlob = await response.blob();
@@ -535,10 +539,6 @@ const playTTS = async (text: string) => {
           <Heart className="h-6 w-6 text-gray-400" />
           <span className="text-[11px] text-gray-400 mt-1">추억</span>
         </button>
-        <Link to="/profile" className="flex flex-col items-center justify-center">
-          <User className="h-6 w-6 text-gray-400" />
-          <span className="text-[11px] text-gray-400 mt-1">프로필</span>
-        </Link>
       </nav>
       </div>
 
