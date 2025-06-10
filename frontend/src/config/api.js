@@ -1,24 +1,57 @@
-const API_BASE_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:8181';
+// EventSource polyfill for better browser compatibility
+let EventSourcePolyfill;
+try {
+  // 원생 EventSource 사용 
+  if (typeof EventSource !== 'undefined') {
+    EventSourcePolyfill = EventSource;
+    console.log('✅ 원생 EventSource 사용');
+  } else {
+    //  원생 EventSource를 사용할 수 없습니다
+    console.warn('⚠️  원생 EventSource를 사용할 수 없습니다');
+    EventSourcePolyfill = null;
+  }
+} catch (error) {
+  console.warn('EventSource 초기화 오류:', error);
+  EventSourcePolyfill = typeof EventSource !== 'undefined' ? EventSource : null;
+}
+
+const API_BASE_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:3001';
 
 export const todoistAPI = {
   // Todoist 연결
   connect: async (apiToken) => {
-    const response = await fetch(`${API_BASE_URL}/api/mcp/todoist/connect`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        api_token: apiToken || import.meta.env.VITE_REACT_APP_TODOIST_API_TOKEN
-      }),
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Connection failed');
+    try {
+      console.log('Todoist MCP 연결 시도 중...');
+      
+      const response = await fetch(`${API_BASE_URL}/api/mcp/todoist/connect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          api_token: apiToken || import.meta.env.VITE_REACT_APP_TODOIST_API_TOKEN
+        }),
+      });
+      
+      if (!response.ok) {
+        let errorMessage = 'Connection failed';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || error.message || errorMessage;
+        } catch (parseError) {
+          console.error('응답 파싱 오류:', parseError);
+          errorMessage = `서버 오류 (${response.status}): ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      console.log('Todoist MCP 연결 성공:', result);
+      return result;
+    } catch (error) {
+      console.error('Todoist 연결 오류:', error);
+      throw error;
     }
-    
-    return response.json();
   },
 
   // 프로젝트 목록 가져오기

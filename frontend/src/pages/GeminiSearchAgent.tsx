@@ -2,14 +2,16 @@ import { useStream } from "@langchain/langgraph-sdk/react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Send, Search, Bot } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
-// 定义处理事件类型
+// 처리된 이벤트 타입
 export interface ProcessedEvent {
   title: string;
   data: string;
 }
 
 export default function GeminiSearchAgent() {
+  const [searchParams] = useSearchParams();
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<
     ProcessedEvent[]
   >([]);
@@ -159,6 +161,14 @@ export default function GeminiSearchAgent() {
   const [inputMessage, setInputMessage] = useState("");
   const [effort, setEffort] = useState("medium");
   const [model, setModel] = useState("gemini-2.0-flash-exp");
+
+  // 从URL参数中获取查询内容并设置到输入框
+  useEffect(() => {
+    const query = searchParams.get('q');
+    if (query) {
+      setInputMessage(query);
+    }
+  }, [searchParams]);
 
   return (
     <div className="flex h-screen bg-gray-50">

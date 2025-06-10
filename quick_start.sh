@@ -20,11 +20,11 @@ fi
 if [ ! -f .env ]; then
     echo "📝 .env 파일 생성 중..."
     cat > .env << EOF
-TODOIST_API_TOKEN=103641f989a0cec1464700543323965e77e78e85
-PORT=8181
-MCP_SERVER_PORT=8002
-REACT_APP_API_URL=http://localhost:8181
-REACT_APP_TODOIST_API_TOKEN=103641f989a0cec1464700543323965e77e78e85
+TODOIST_API_TOKEN=your_todoist_api_token
+PORT=3001
+MCP_SERVER_PORT=8000
+REACT_APP_API_URL=http://localhost:3001
+REACT_APP_TODOIST_API_TOKEN=your_todoist_api_token   
 EOF
     echo "⚠️  .env 파일을 편집하여 Todoist API Token을 추가해주세요"
     echo "   그 다음 이 스크립트를 다시 실행해주세요"
@@ -33,7 +33,7 @@ fi
 
 # API Token 설정 확인
 source .env
-if [ "$TODOIST_API_TOKEN" = "103641f989a0cec1464700543323965e77e78e85" ]; then
+if [ "$TODOIST_API_TOKEN" = "your_todoist_api_token" ]; then
     echo "⚠️  .env 파일에서 Todoist API Token을 먼저 설정해주세요"
     exit 1
 fi
@@ -44,7 +44,12 @@ pip3 install fastmcp requests python-dotenv
 
 # Node.js 의존성 설치
 echo "📦 Node.js 의존성 설치 중..."
+cd node-api
 npm install express cors eventsource dotenv
+npm install eventsource
+
+cd frontend
+npm install eventsource
 
 # 필요한 디렉토리 생성
 mkdir -p mcp_project
@@ -63,8 +68,10 @@ sleep 3
 
 # API 서버 시작
 echo "▶️  API 서버 시작 중 (포트 $PORT)..."
-node api_server.js &
+node todoist_api_server.js &
 API_PID=$!
+
+
 
 echo ""
 echo "✅ 서비스 시작 성공!"
