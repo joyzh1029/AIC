@@ -4,6 +4,7 @@ import {
   Search, Calendar, CheckSquare, Plus, X, Clock, Tag, Flag, ChevronDown, 
   ChevronRight, Loader2, RefreshCw 
 } from "lucide-react";
+import todoistAPI from '../config/api';
 
 interface Message {
   id: string;
@@ -191,21 +192,7 @@ const TodoistPanel = ({
     setConnectionError("");
     
     try {
-      const response = await fetch('/api/mcp/todoist/connect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          api_token: process.env.REACT_APP_TODOIST_API_TOKEN || 'your-todoist-api-token-here'
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('MCP 서버 연결 실패');
-      }
-
-      const data = await response.json();
+      await todoistAPI.connect();
       setMcpConnected(true);
       
       await loadProjects();
@@ -221,15 +208,7 @@ const TodoistPanel = ({
 
   const loadProjects = async () => {
     try {
-      const response = await fetch('/api/mcp/todoist/projects', {
-        method: 'GET',
-      });
-
-      if (!response.ok) {
-        throw new Error('프로젝트 로드 실패');
-      }
-
-      const data = await response.json();
+      const data = await todoistAPI.getProjects();
       setProjects(data.projects || []);
     } catch (error) {
       console.error('프로젝트 로드 오류:', error);
@@ -239,19 +218,7 @@ const TodoistPanel = ({
   const loadTasks = async (projectId?: string) => {
     setLoading(true);
     try {
-      const url = projectId 
-        ? `/api/mcp/todoist/tasks?project_id=${projectId}`
-        : '/api/mcp/todoist/tasks';
-        
-      const response = await fetch(url, {
-        method: 'GET',
-      });
-
-      if (!response.ok) {
-        throw new Error('태스크 로드 실패');
-      }
-
-      const data = await response.json();
+      const data = await todoistAPI.getTasks(projectId, undefined);
       setTasks(data.tasks || []);
     } catch (error) {
       console.error('태스크 로드 오류:', error);
@@ -271,19 +238,7 @@ const TodoistPanel = ({
         due_date: selectedDate || undefined,
       };
 
-      const response = await fetch('/api/mcp/todoist/tasks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(taskData),
-      });
-
-      if (!response.ok) {
-        throw new Error('태스크 추가 실패');
-      }
-
-      const data = await response.json();
+      await todoistAPI.createTask(taskData);
       
       setNewTaskInput("");
       setSelectedPriority(4);
@@ -299,14 +254,8 @@ const TodoistPanel = ({
 
   const completeTask = async (taskId: string, taskContent: string) => {
     try {
-      const response = await fetch(`/api/mcp/todoist/tasks/${taskId}/complete`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error('태스크 완료 실패');
-      }
-
+      await todoistAPI.completeTask(taskId);
+      
       setTasks(tasks.filter(task => task.id !== taskId));
       
       onSendMessage(`태스크 "${taskContent}"를 완료했습니다! 🎉`, "todoist");
