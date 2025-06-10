@@ -1,51 +1,51 @@
-// schedule_service.js - 스마트 일정 에이전트 서비스
+// schedule_service.js - Smart Schedule Agent Service
 
 class ScheduleAgentService {
   constructor(mcpClient = null) {
-    this.mcpClient = mcpClient;  // 외부 MCP 클라이언트 수락
+    this.mcpClient = mcpClient;  // Accept external MCP client
     this.isConnected = false;
   }
 
-  // MCP 클라이언트 설정
+  // Set MCP client
   setMcpClient(mcpClient) {
     this.mcpClient = mcpClient;
   }
 
-  // MCP 연결 보장
+  // Ensure MCP connection
   async ensureConnection() {
     if (!this.mcpClient) {
-      throw new Error('MCP 클라이언트가 설정되지 않았습니다');
+      throw new Error('MCP client is not configured');
     }
 
     if (!this.isConnected) {
       try {
-        // 클라이언트가 아직 연결되지 않은 경우 연결 시도
+        // Attempt connection if client is not yet connected
         if (!this.mcpClient.isConnected()) {
           await this.mcpClient.connect();
         }
         this.isConnected = true;
-        console.log('✅ MCP 연결 확인됨');
+        console.log('MCP connection confirmed');
       } catch (error) {
-        console.error('❌ MCP 연결 실패:', error.message);
-        throw new Error('FastMCP 서버가 준비되지 않았습니다');
+        console.error('MCP connection failed:', error.message);
+        throw new Error('FastMCP server is not ready');
       }
     }
   }
 
-  // 메시지 처리
+  // Process message
   async processMessage(message) {
-    console.log('🤖 일정 메시지 처리:', message);
+    console.log('Processing schedule message:', message);
     
     try {
       await this.ensureConnection();
       
-      // 메시지 분석 및 작업 결정
+      // Analyze message and determine action
       const analysis = this.analyzeMessage(message);
-      console.log('📋 메시지 분석 결과:', analysis);
+      console.log('Message analysis result:', analysis);
       
       let result = {};
       
-      // 작업 유형에 따라 처리
+      // Process based on action type
       switch (analysis.type) {
         case 'create_task':
           result = await this.createTask(analysis);
@@ -62,28 +62,29 @@ class ScheduleAgentService {
         default:
           result = {
             type: 'response',
-            message: `메시지를 이해했습니다: "${message}". 구체적인 작업을 요청해주세요.`
+            message: `I understood your message: "${message}". Please request specific actions.`
           };
       }
       
       return result;
     } catch (error) {
-      console.error('❌ 메시지 처리 오류:', error);
+      console.error('Message processing error:', error);
       return {
         type: 'error',
-        message: `처리 중 오류가 발생했습니다: ${error.message}`
+        message: `An error occurred during processing: ${error.message}`
       };
     }
   }
 
-  // 메시지 분석
+  // Analyze message
   analyzeMessage(message) {
     const lowerMessage = message.toLowerCase();
     
-    // 작업 생성 관련 키워드
+    // Task creation related keywords
     if (lowerMessage.includes('할일') || lowerMessage.includes('task') || 
         lowerMessage.includes('추가') || lowerMessage.includes('만들') ||
-        lowerMessage.includes('생성')) {
+        lowerMessage.includes('생성') || lowerMessage.includes('create') ||
+        lowerMessage.includes('add')) {
       return {
         type: 'create_task',
         content: message,
@@ -91,22 +92,23 @@ class ScheduleAgentService {
       };
     }
     
-    // 목록 조회 관련 키워드
+    // List query related keywords
     if (lowerMessage.includes('목록') || lowerMessage.includes('리스트') ||
-        lowerMessage.includes('list') || lowerMessage.includes('보여')) {
+        lowerMessage.includes('list') || lowerMessage.includes('보여') ||
+        lowerMessage.includes('show')) {
       return {
         type: 'list_tasks'
       };
     }
     
-    // 프로젝트 조회
+    // Project query
     if (lowerMessage.includes('프로젝트') || lowerMessage.includes('project')) {
       return {
         type: 'get_projects'
       };
     }
     
-    // 연결 테스트
+    // Connection test
     if (lowerMessage.includes('연결') || lowerMessage.includes('connection') ||
         lowerMessage.includes('테스트') || lowerMessage.includes('test')) {
       return {
@@ -120,87 +122,89 @@ class ScheduleAgentService {
     };
   }
 
-  // 작업 제목 추출
+  // Extract task title
   extractTaskTitle(message) {
-    // 간단한 작업 제목 추출 로직
+    // Simple task title extraction logic
     let title = message;
     
-    // 불필요한 단어 제거
-    const wordsToRemove = ['할일', '작업', '추가', '만들어', '생성', '해줘', '주세요'];
+    // Remove unnecessary words
+    const wordsToRemove = ['할일', '작업', '추가', '만들어', '생성', '해줘', '주세요', 'task', 'create', 'add'];
     wordsToRemove.forEach(word => {
       title = title.replace(new RegExp(word, 'gi'), '');
     });
     
-    return title.trim() || '새 작업';
+    return title.trim() || 'New task';
   }
 
-  // 작업 생성
+  // Create task
   async createTask(analysis) {
     try {
       const result = await this.mcpClient.callTool('create_task', {
         content: analysis.title,
-        description: `생성된 작업: ${analysis.content}`
+        description: `Created task: ${analysis.content}`
       });
       
       return {
         type: 'task_created',
-        message: `✅ 작업이 생성되었습니다: "${analysis.title}"`,
+        message: `Task created: "${analysis.title}"`,
         result: result
       };
     } catch (error) {
-      throw new Error(`작업 생성 실패: ${error.message}`);
+      throw new Error(`Task creation failed: ${error.message}`);
     }
   }
 
-  // 작업 목록 조회
+  // List tasks
   async listTasks(analysis) {
     try {
       const result = await this.mcpClient.callTool('get_today_tasks');
       
       return {
         type: 'task_list',
-        message: '📋 오늘의 할일 목록',
+        message: 'Today\'s task list',
         result: result
       };
     } catch (error) {
-      throw new Error(`작업 목록 조회 실패: ${error.message}`);
+      throw new Error(`Task list query failed: ${error.message}`);
     }
   }
 
-  // 프로젝트 조회
+  // Get projects
   async getProjects() {
     try {
       const result = await this.mcpClient.callTool('get_projects');
       
       return {
         type: 'project_list',
-        message: '📁 프로젝트 목록',
+        message: 'Project list',
         result: result
       };
     } catch (error) {
-      throw new Error(`프로젝트 조회 실패: ${error.message}`);
+      throw new Error(`Project query failed: ${error.message}`);
     }
   }
 
-  // 연결 테스트
+  // Test connection
   async testConnection() {
     try {
-      // 간단한 도구 목록 호출로 연결 테스트
+      // Test connection with simple tool list call
       const result = await this.mcpClient.listTools();
       
       return {
         type: 'connection_test',
-        message: '🔗 연결 테스트 성공',
-        result: { message: 'MCP 서버와 성공적으로 연결되었습니다', tools: result }
+        message: 'Connection test successful',
+        result: { message: 'Successfully connected to MCP server', tools: result }
       };
     } catch (error) {
-      throw new Error(`연결 테스트 실패: ${error.message}`);
+      throw new Error(`Connection test failed: ${error.message}`);
     }
   }
 
-  // 연결 해제
+  // Disconnect
   disconnect() {
-    // 공유된 클라이언트이므로 여기서 연결을 끊지 않음
+    if (this.mcpClient) {
+      this.mcpClient.disconnect();
+    }
     this.isConnected = false;
   }
 }

@@ -1,4 +1,4 @@
-// streamable-http-client.js - MCP StreamableHTTP 프로토콜 클라이언트
+// streamable-http-client.js - MCP StreamableHTTP Protocol Client
 const fetch = require('node-fetch');
 
 class StreamableHttpClient {
@@ -8,23 +8,23 @@ class StreamableHttpClient {
     this.sessionId = null;
     this.initialized = false;
     
-    // URL이 올바른 MCP 엔드포인트를 가리키도록 보장
+    // Ensure URL points to correct MCP endpoint
     if (!this.serverUrl.endsWith('/mcp')) {
       this.serverUrl = this.serverUrl.replace(/\/$/, '') + '/mcp';
     }
   }
 
-  // MCP StreamableHTTP 초기화
+  // Initialize MCP StreamableHTTP
   async connect() {
     try {
-      console.log('🔄 MCP StreamableHTTP 연결 초기화...');
+      console.log('MCP StreamableHTTP connection initializing...');
       
-      // MCP StreamableHTTP 초기화 요청
+      // MCP StreamableHTTP initialization request
       const initResponse = await fetch(this.serverUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json, text/event-stream'  // FastMCP는 두 가지 타입을 동시에 요구
+          'Accept': 'application/json, text/event-stream'  // FastMCP requires both types simultaneously
         },
         body: JSON.stringify({
           "jsonrpc": "2.0",
@@ -47,27 +47,27 @@ class StreamableHttpClient {
         timeout: 15000
       });
       
-      console.log('📊 초기화 응답 상태:', initResponse.status, initResponse.statusText);
+      console.log('Initialization response status:', initResponse.status, initResponse.statusText);
       
       if (!initResponse.ok) {
         const errorText = await initResponse.text();
-        throw new Error(`초기화 실패: ${initResponse.status} ${initResponse.statusText}\n${errorText}`);
+        throw new Error(`Initialization failed: ${initResponse.status} ${initResponse.statusText}\n${errorText}`);
       }
       
-      // 세션 ID 가져오기
+      // Get session ID
       this.sessionId = initResponse.headers.get('mcp-session-id') || initResponse.headers.get('x-session-id');
-      console.log('🔑 Session ID:', this.sessionId);
+      console.log('Session ID:', this.sessionId);
       
-      // 응답 타입 확인 및 적절한 처리
+      // Check response type and handle appropriately
       const contentType = initResponse.headers.get('content-type');
       let initResult;
       
       if (contentType && contentType.includes('text/event-stream')) {
-        // SSE 형식 응답
+        // SSE format response
         const responseText = await initResponse.text();
-        console.log('📡 SSE 응답:', responseText.substring(0, 300) + '...');
+        console.log('SSE response:', responseText.substring(0, 300) + '...');
         
-        // SSE 형식 파싱
+        // Parse SSE format
         const lines = responseText.split('\n');
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -75,52 +75,52 @@ class StreamableHttpClient {
               initResult = JSON.parse(line.substring(6));
               break;
             } catch (e) {
-              // 다음 라인 시도 계속
+              // Continue trying next line
             }
           }
         }
       } else {
-        // 표준 JSON 응답
+        // Standard JSON response
         initResult = await initResponse.json();
       }
       
-      console.log('✅ MCP StreamableHTTP 초기화 응답:', initResult);
+      console.log('MCP StreamableHTTP initialization response:', initResult);
       
-      // 응답 포맷 확인
+      // Check response format
       if (initResult && initResult.result) {
         this.initialized = true;
         this.connected = true;
-        console.log('🎉 StreamableHTTP 연결 설정 성공');
+        console.log('StreamableHTTP connection setup successful');
         return initResult.result;
       } else if (initResult && initResult.error) {
-        throw new Error(`MCP 초기화 오류: ${initResult.error.message}`);
+        throw new Error(`MCP initialization error: ${initResult.error.message}`);
       } else {
-        throw new Error('유효하지 않은 초기화 응답 형식');
+        throw new Error('Invalid initialization response format');
       }
       
     } catch (error) {
-      console.error('❌ StreamableHTTP 연결 실패:', error);
+      console.error('StreamableHTTP connection failed:', error);
       this.connected = false;
       this.initialized = false;
       throw error;
     }
   }
 
-  // MCP 도구 호출 - StreamableHTTP 방식
+  // MCP tool call - StreamableHTTP method
   async callTool(toolName, params = {}) {
     if (!this.connected || !this.initialized) {
       await this.connect();
     }
     
     try {
-      console.log(`🔧 도구 호출: ${toolName}`, params);
+      console.log(`Calling tool: ${toolName}`, params);
       
       const headers = {
         'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream'  // FastMCP 요구사항
+        'Accept': 'application/json, text/event-stream'  // FastMCP requirement
       };
       
-      // 세션 ID 추가 (있는 경우)
+      // Add session ID (if available)
       if (this.sessionId) {
         headers['mcp-session-id'] = this.sessionId;
       }
@@ -140,23 +140,23 @@ class StreamableHttpClient {
         timeout: 60000
       });
       
-      console.log('🛠️ 도구 호출 응답 상태:', response.status, response.statusText);
+      console.log('Tool call response status:', response.status, response.statusText);
       
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`도구 호출 실패: ${response.status} ${response.statusText}\n${errorText}`);
+        throw new Error(`Tool call failed: ${response.status} ${response.statusText}\n${errorText}`);
       }
       
-      // 응답 처리 (JSON 또는 SSE 형식 가능)
+      // Response handling (JSON or SSE format possible)
       const contentType = response.headers.get('content-type');
       let result;
       
       if (contentType && contentType.includes('text/event-stream')) {
-        // SSE 형식 응답
+        // SSE format response
         const responseText = await response.text();
-        console.log('📡 도구 호출 SSE 응답:', responseText.substring(0, 300) + '...');
+        console.log('Tool call SSE response:', responseText.substring(0, 300) + '...');
         
-        // SSE 형식 파싱
+        // Parse SSE format
         const lines = responseText.split('\n');
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -167,29 +167,29 @@ class StreamableHttpClient {
                 break;
               }
             } catch (e) {
-              // 다음 라인 시도 계속
+              // Continue trying next line
             }
           }
         }
       } else {
-        // 표준 JSON 응답
+        // Standard JSON response
         result = await response.json();
       }
       
-      console.log('📋 도구 호출 파싱 결과:', JSON.stringify(result, null, 2));
+      console.log('Tool call parsing result:', JSON.stringify(result, null, 2));
       
       if (result && result.error) {
-        throw new Error(`MCP 도구 오류: ${result.error.message}`);
+        throw new Error(`MCP tool error: ${result.error.message}`);
       }
       
       return result ? result.result : null;
     } catch (error) {
-      console.error(`❌ 도구 ${toolName} 호출 실패:`, error);
+      console.error(`Tool ${toolName} call failed:`, error);
       throw error;
     }
   }
 
-  // MCP 리소스 읽기 - StreamableHTTP 방식
+  // MCP resource reading - StreamableHTTP method
   async getResource(resourceUri) {
     if (!this.connected || !this.initialized) {
       await this.connect();
@@ -200,7 +200,7 @@ class StreamableHttpClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json, text/event-stream'
         },
         body: JSON.stringify({
           "jsonrpc": "2.0",
@@ -215,35 +215,36 @@ class StreamableHttpClient {
       
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`리소스 읽기 실패: ${response.status} ${response.statusText}\n${errorText}`);
+        throw new Error(`Resource read failed: ${response.status} ${response.statusText}\n${errorText}`);
       }
       
       const result = await response.json();
       
-      if (result.error) {
-        throw new Error(`MCP 리소스 오류: ${result.error.message}`);
+      if (result && result.error) {
+        throw new Error(`MCP resource error: ${result.error.message}`);
       }
       
-      return result.result || result;
+      return result ? result.result : null;
     } catch (error) {
-      console.error(`❌ 리소스 ${resourceUri} 읽기 실패:`, error);
+      console.error('Resource read failed:', error);
       throw error;
     }
   }
 
-  // 사용 가능한 도구 목록 가져오기
+  // Get tool list - StreamableHTTP method
   async listTools() {
     if (!this.connected || !this.initialized) {
       await this.connect();
     }
     
     try {
+      console.log('Fetching tool list...');
+      
       const headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/event-stream'
       };
       
-      // 세션 ID 추가 (있는 경우)
       if (this.sessionId) {
         headers['mcp-session-id'] = this.sessionId;
       }
@@ -256,21 +257,24 @@ class StreamableHttpClient {
           "id": Date.now(),
           "method": "tools/list"
         }),
-        timeout: 10000
+        timeout: 30000
       });
+      
+      console.log('Tool list response status:', response.status, response.statusText);
       
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`도구 목록 조회 실패: ${response.status} ${response.statusText}\n${errorText}`);
+        throw new Error(`Tool list fetch failed: ${response.status} ${response.statusText}\n${errorText}`);
       }
       
-      // 응답 처리 (JSON 또는 SSE 형식 가능)
+      // Response processing (JSON or SSE format possible)
       const contentType = response.headers.get('content-type');
       let result;
       
       if (contentType && contentType.includes('text/event-stream')) {
-        // SSE 형식 응답
         const responseText = await response.text();
+        console.log('Tool list SSE response:', responseText.substring(0, 300) + '...');
+        
         const lines = responseText.split('\n');
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -281,65 +285,50 @@ class StreamableHttpClient {
                 break;
               }
             } catch (e) {
-              // 다음 라인 시도 계속
+              // Continue trying next line
             }
           }
         }
       } else {
-        // 표준 JSON 응답
         result = await response.json();
       }
       
+      console.log('Tool list result:', JSON.stringify(result, null, 2));
+      
       if (result && result.error) {
-        throw new Error(`MCP 도구 목록 오류: ${result.error.message}`);
+        throw new Error(`MCP tool list error: ${result.error.message}`);
       }
       
       return result ? result.result : null;
     } catch (error) {
-      console.error('❌ 도구 목록 조회 실패:', error);
+      console.error('Tool list fetch failed:', error);
       throw error;
     }
   }
 
-  // Ping 테스트
+  // Ping test
   async ping() {
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream'
-      };
-      
-      // 세션 ID 추가 (있는 경우)
-      if (this.sessionId) {
-        headers['mcp-session-id'] = this.sessionId;
-      }
-      
-      const response = await fetch(this.serverUrl, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({
-          "jsonrpc": "2.0",
-          "id": Date.now(),
-          "method": "ping"
-        }),
+      const response = await fetch(this.serverUrl.replace('/mcp', '/health'), {
+        method: 'GET',
         timeout: 5000
       });
       
       return response.ok;
     } catch (error) {
+      console.log('Ping failed:', error.message);
       return false;
     }
   }
 
-  // 연결 해제
+  // Disconnect
   disconnect() {
     this.connected = false;
     this.initialized = false;
     this.sessionId = null;
-    console.log('🔌 StreamableHTTP 연결이 해제되었습니다');
   }
 
-  // 연결 상태 확인
+  // Check connection status
   isConnected() {
     return this.connected && this.initialized;
   }
