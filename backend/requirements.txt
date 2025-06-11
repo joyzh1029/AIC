@@ -2,9 +2,9 @@ transformers==4.52.3
 accelerate==1.7.0
 decord==0.6.0
 opencv-python==4.11.0.86
-torch==2.7.0+cu118
-torchaudio==2.7.0+cu118
-torchvision==0.22.0+cu118
+# torch==2.7.0+cu118
+# torchaudio==2.7.0+cu118
+# torchvision==0.22.0+cu118
 num2words==0.5.14
 hf-xet==1.1.2
 sounddevice==0.5.2
