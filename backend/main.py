@@ -14,6 +14,8 @@ from app.routers import api_router
 
 # 코어 모듈 임포트
 from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
+from app.core.global_instances import set_global_analyzer, set_global_models
+from app.nlp.llm import configure_gemini # ✨ configure_gemini 임포트 추가
 
 # FastAPI 앱 초기화
 app = FastAPI(
@@ -60,10 +62,15 @@ async def startup_event():
     # 모델 로딩
     global processor, vlm_model, device, whisper_model
     processor, vlm_model, device, whisper_model = initialize_models()
-    
+    set_global_models(vlm_model, processor, device, whisper_model)
+
     # 분석 스레드 시작
     global analyzer
     analyzer = start_background_threads(vlm_model, processor, device, whisper_model)
+    set_global_analyzer(analyzer)
+    
+    # ✨ Gemini API 및 모델 초기화
+    configure_gemini() # ✨ 이 줄 추가
 
 @app.on_event("shutdown")
 async def shutdown_event():

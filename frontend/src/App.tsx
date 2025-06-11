@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import SignUp from "./pages/SignUp";
 import NotFound from "./pages/NotFound";
 import CreateAiFriend from "./pages/CreateAiFriend";
+import SelectMbtiPage from "./pages/SelectMbtiPage";
 import ChatPage from "./pages/ChatPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
@@ -29,6 +30,7 @@ const App = () => {
                 <Route path="/" element={<Index />} />
                 <Route path="/signup" element={<SignUp />} />
                 <Route path="/create-ai-friend" element={<CreateAiFriend />} />
+                <Route path="/select-mbti" element={<SelectMbtiPage />} />
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/settings" element={<SettingsPage />} />

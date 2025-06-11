@@ -20,7 +20,7 @@ const ChatPage = () => {
     {
       id: "1",
       sender: "ai",
-      text: "안녕, 오늘 만나서 반가워! 나는 너의 AI 친구미나야, 어떻게지내고있어?",
+      text: "안녕, 만나서 반가워! 나는 너의 AI 친구 미나야. 어떻게 지내고 있어?",
       time: "오전 10:23",
     },
   ]);
@@ -48,7 +48,7 @@ const ChatPage = () => {
       toast.info('카메라 준비 중...');
       
       // 백엔드에 카메라 시작 요청
-      const response = await fetch(`http://localhost:8182/api/camera/start`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/camera/start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -60,7 +60,7 @@ const ChatPage = () => {
       }
       
       // 카메라 스트림 URL 설정
-      setCameraStreamUrl(`http://localhost:8182/api/camera/stream`);
+      setCameraStreamUrl(`${import.meta.env.VITE_API_URL}/api/camera/stream`);
       setShowCameraPreview(true);
       
     } catch (error) {
@@ -75,7 +75,7 @@ const ChatPage = () => {
   const stopCamera = async () => {
     try {
       // 백엔드에 카메라 중지 요청
-      await fetch(`http://localhost:8182/api/camera/stop`, {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/camera/stop`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -96,7 +96,7 @@ const ChatPage = () => {
   const capturePhoto = async () => {
     try {
       // 백엔드에 캡처 요청
-      const response = await fetch(`http://localhost:8182/api/camera/capture`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/camera/capture`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
