@@ -61,8 +61,10 @@ const SignUp = () => {
     e.preventDefault();
     console.log("Login attempted with:", { email, password, rememberMe });
     // Redirect to create AI friend page after login
-    navigate('/create-ai-friend');
+    navigate('/chat'); // 파라미터 없이 바로 이동
   };
+    // navigate('/create-ai-friend');
+  // };
 
   return (
     <div className="min-h-screen flex">

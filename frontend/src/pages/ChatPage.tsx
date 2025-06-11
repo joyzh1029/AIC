@@ -49,20 +49,31 @@ const ChatPage = () => {
   // URL 파라미터 처리
   useEffect(() => {
     const params = {
-      userMbti: searchParams.get('user_mbti') || "",
-      relationshipType: searchParams.get('relationship_type') || "",
+      userMbti: searchParams.get('user_mbti') || "ENFP", // 기본값 추가
+      relationshipType: searchParams.get('relationship_type') || "동질적 관계", // 기본값 추가
       aiName: searchParams.get('ai_name') || "AI 친구",
       currentEmotion: "neutral"
     };
     
-    if (!params.userMbti || !params.relationshipType) {
-      toast.error("MBTI 정보가 필요합니다.");
-      navigate('/select-mbti');
-      return;
-    }
-    
+    // 검증 로직 제거하고 기본값으로 설정
     setChatState(params);
-  }, [searchParams, navigate]);
+  }, [searchParams]);
+  // useEffect(() => {
+  //   const params = {
+  //     userMbti: searchParams.get('user_mbti') || "",
+  //     relationshipType: searchParams.get('relationship_type') || "",
+  //     aiName: searchParams.get('ai_name') || "AI 친구",
+  //     currentEmotion: "neutral"
+  //   };
+    
+  //   if (!params.userMbti || !params.relationshipType) {
+  //     toast.error("MBTI 정보가 필요합니다.");
+  //     navigate('/select-mbti');
+  //     return;
+  //   }
+    
+  //   setChatState(params);
+  // }, [searchParams, navigate]);
 
   // 자동 스크롤
   useEffect(() => {
@@ -103,6 +114,16 @@ const ChatPage = () => {
     return message;
   }, []);
 
+  const addSplitMessages = useCallback((response: string, sender: "user" | "ai", delay: number = 1000) => {
+    const parts = response.split('[분할]').map(part => part.trim()).filter(part => part.length > 0);
+  
+    parts.forEach((part, index) => {
+      setTimeout(() => {
+        addMessage(part, sender);
+      }, index * delay);
+    });
+  }, [addMessage]);
+
   // 카메라 제어
   const toggleCamera = useCallback(async () => {
     if (isCapturing) {
@@ -131,7 +152,13 @@ const ChatPage = () => {
         
         // AI 응답 요청
         const chatData = await apiCall('/api/chat', {
-          messages: [{ role: "user", content: `[사진 전송 - 감정: ${data.emotion}]`, timestamp: Date.now() / 1000 }],
+          messages: [
+            {
+              role: "user",
+              content: `[사진 전송 - 감정: ${data.emotion}]`,
+              timestamp: Date.now() / 1000
+            }
+          ],
           user_id: "user123",
           ai_id: "ai_friend_001",
           user_mbti: chatState.userMbti,
@@ -140,13 +167,19 @@ const ChatPage = () => {
           context: { emotion: data.emotion }
         });
         
-        addMessage(chatData.response, "ai");
+        // [분할] 처리
+        if (chatData.response && chatData.response.includes('[분할]')) {
+          addSplitMessages(chatData.response, "ai");
+        } else {
+          addMessage(chatData.response || "응답을 받지 못했습니다.", "ai");
+        }
+        
         await toggleCamera();
       }
     } catch (error) {
       toast.error('사진 촬영에 실패했습니다.');
     }
-  }, [apiCall, addMessage, chatState, toggleCamera]);
+  }, [apiCall, addMessage, chatState, toggleCamera, addSplitMessages]);
 
   // 메시지 전송
   const handleSendMessage = useCallback(async () => {
@@ -157,8 +190,15 @@ const ChatPage = () => {
     setInputMessage("");
     
     try {
+      // ✅ chat.py의 ChatRequest 구조에 맞춤
       const data = await apiCall('/api/chat', {
-        messages: [{ role: "user", content: message, timestamp: Date.now() / 1000 }],
+        messages: [
+          {
+            role: "user",
+            content: message,
+            timestamp: Date.now() / 1000
+          }
+        ],
         user_id: "user123",
         ai_id: "ai_friend_001",
         user_mbti: chatState.userMbti,
@@ -167,11 +207,17 @@ const ChatPage = () => {
         context: { emotion: chatState.currentEmotion }
       });
       
-      addMessage(data.response, "ai");
+      // [분할]로 나누어서 순차적으로 메시지 추가
+      if (data.response && data.response.includes('[분할]')) {
+        addSplitMessages(data.response, "ai");
+      } else {
+        addMessage(data.response || "응답을 받지 못했습니다.", "ai");
+      }
     } catch (error) {
+      console.error('메시지 전송 실패:', error);
       toast.error('메시지 전송에 실패했습니다.');
     }
-  }, [inputMessage, apiCall, chatState, addMessage]);
+  }, [inputMessage, apiCall, chatState, addMessage, addSplitMessages]);
 
   // TTS 재생
   const playTTS = useCallback(async (text: string) => {
