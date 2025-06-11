@@ -23,7 +23,7 @@ class MCPStdioClient extends EventEmitter {
       console.log('MCP Stdio connection initializing...');
       
       // Start Python process
-      this.process = spawn('python', [this.serverScript], {
+      this.process = spawn('node', [this.serverScript], {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: process.cwd(),
         env: {

@@ -9,7 +9,7 @@ from typing import Callable, List, Dict, Any
 api_router = APIRouter()
 
 # 모든 하위 라우터 가져오기
-from app.routers.avatar import router as avatar_router
+# from app.routers.avatar import router as avatar_router
 from app.routers.chat import router as chat_router
 from app.routers.camera import router as camera_router
 from app.routers.emotion import router as emotion_router
@@ -17,7 +17,7 @@ from app.routers.schedule_chat import router as schedule_chat_router
 
 
 # 모든 라우터 등록하기
-api_router.include_router(avatar_router)
+# api_router.include_router(avatar_router)
 api_router.include_router(chat_router)
 api_router.include_router(camera_router)
 api_router.include_router(emotion_router)

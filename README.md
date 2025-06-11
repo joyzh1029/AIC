@@ -98,6 +98,7 @@ python -m uvicorn tts:app --host 0.0.0.0 --port 8181 --reload
 ```bash
 cd frontend
 npm install
+npm install @langchain/langgraph-sdk @langchain/core
 npm run dev
 ```
 

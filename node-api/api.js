@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 // Service initialization - MCP server script path
-const mcpServerPath = path.join(__dirname, '..', 'backend', 'todoist_mcp_server.py');
+const mcpServerPath = path.join(__dirname, '..', 'node-mcp-servers', 'todoist', 'todoist-mcp-node-server.js');
 const mcpClient = new MCPStdioClient(mcpServerPath);
 const scheduleService = new ScheduleAgentService(mcpClient);
 
@@ -333,6 +333,6 @@ app.get('/health', (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`Node.js API server started on port ${PORT}`);
-  console.log(`StreamableHTTP MCP client ready`);
+  console.log(`Todoist MCP Server`);
   console.log(`Health check available at: http://localhost:${PORT}/health`);
 }); 
