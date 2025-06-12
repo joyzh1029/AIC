@@ -7,12 +7,12 @@ import { toast } from "sonner";
 
 const MBTI_TYPES = [
   "ISTJ", "ISFJ", "INFJ", "INTJ", "ISTP", "ISFP", "INFP", "INTP",
-  "ESTP", "ESFP", "ENFP", "ENTP", "ESTJ", "ESFJ", "ENFJ", "ENTJ"
+  "ESTP", "ESFP", "ENFP", "ENTP", "ESTJ", "ESFJ", "ENFJ", "ENTJ", "TSUNDERE", "SKEPTIC"
 ];
 
 const RELATIONSHIP_TYPES = [
   { value: "동질적 관계", label: "동질적 관계 (비슷한 성격)" },
-  { value: "보완적 관계", label: "보완적 관계 (서로 다른 매력)" }
+  { value: "보완적 관계", label: "보완적 관계 (서로 다른 매력)" },
 ];
 
 const SelectMbtiPage = () => {
@@ -64,12 +64,12 @@ const SelectMbtiPage = () => {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">
-            AI 친구와의 관계를 설정해주세요!
+            어떤 친구를 원하시나요?
           </h1>
           <p className="text-gray-600">
-            당신의 MBTI와 AI 친구와의 관계 유형을 선택하면,
+            당신의 MBTI와 원하는 관계 유형을 선택하면,
             <br />
-            더욱 맞춤화된 대화를 나눌 수 있어요.
+            더 잘 맞는 친구를 만날 수 있어요.
           </p>
         </div>
 
@@ -104,7 +104,7 @@ const SelectMbtiPage = () => {
         {/* Relationship Type Selection */}
         <div className="space-y-2">
           <label htmlFor="relationship-type" className="block text-gray-700 font-medium text-left">
-            AI 친구와 어떤 관계를 원하세요?
+            어떤 관계를 원하시나요?
           </label>
           <Select onValueChange={setRelationshipType} value={relationshipType || undefined}>
             <SelectTrigger id="relationship-type" className="w-full">

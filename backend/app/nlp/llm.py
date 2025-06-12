@@ -65,7 +65,7 @@ async def generate_response(
 
     # ✨ MBTI 페르소나 적용 (ai_mbti_persona가 제공되면 추가)
     if ai_mbti_persona:
-        mbti_description = MBTI_PERSONAS.get(ai_mbti_persona, f"너는 {ai_mbti_persona} 성격의 AI야.")
+        mbti_description = MBTI_PERSONAS.get(ai_mbti_persona, f"{ai_mbti_persona}")
         full_persona = f"{mbti_description}\n{common_directives}\n"
         logger.info(f"Applying AI persona: {mbti_description}")
     else:
