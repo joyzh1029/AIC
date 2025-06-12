@@ -541,10 +541,20 @@ const RealtimeChat: React.FC = () => {
 
       {/* 실시간 텍스트 표시 */}
       <div className="absolute bottom-40 left-4 right-4 z-10">
-        <div className="bg-white/30 backdrop-blur-sm rounded-2xl p-4 min-h-[100px] flex items-center justify-center">
-          <p className="text-gray-800 text-center leading-relaxed">
-            {currentText}
-          </p>
+        <div className="bg-white/30 backdrop-blur-sm rounded-2xl p-4 min-h-[100px] flex flex-col items-center justify-center">
+          {messages.length > 0 ? (
+            <>
+              <div className="flex items-center mb-2">
+                <span className={`text-xs font-semibold mr-2 ${messages[messages.length-1].type === 'user' ? 'text-blue-500' : 'text-purple-600'}`}>{messages[messages.length-1].type === 'user' ? '나' : 'AI 친구'}</span>
+                <span className="text-xs text-gray-500">{messages[messages.length-1].timestamp.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <p className="text-gray-800 text-center leading-relaxed text-base break-words">
+                {messages[messages.length-1].text}
+              </p>
+            </>
+          ) : (
+            <p className="text-gray-800 text-center leading-relaxed">{currentText}</p>
+          )}
         </div>
         {isSpeaking && (
           <div className="flex justify-center mt-2">
@@ -590,7 +600,7 @@ const RealtimeChat: React.FC = () => {
           />
           
           {/* 사이드바 */}
-          <div className="w-80 h-full bg-white/90 backdrop-blur-xl flex flex-col shadow-2xl animate-slide-in-right">
+          <div className="w-80 h-full bg-gradient-to-br from-purple-200/90 via-pink-100/90 to-purple-100/80 backdrop-blur-2xl flex flex-col shadow-2xl animate-slide-in-right rounded-l-3xl">
             {/* 헤더 */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-800">대화 내용</h2>
@@ -617,22 +627,16 @@ const RealtimeChat: React.FC = () => {
                     className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-[85%] px-4 py-3 rounded-2xl shadow-sm ${
+                      className={`max-w-[85%] px-4 py-3 rounded-3xl shadow-md ${
                         message.type === 'user'
                           ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100 text-gray-800'
+                          : 'bg-white/80 text-gray-900'
                       }`}
+                      style={{ boxShadow: '0 2px 12px 0 rgba(80, 80, 160, 0.10)' }}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium opacity-80">
-                          {message.type === 'user' ? '나' : 'AI 친구'}
-                        </span>
-                        <span className="text-xs opacity-70 ml-2">
-                          {message.timestamp.toLocaleTimeString('ko-KR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </span>
+                        <span className={`text-xs font-semibold ${message.type === 'user' ? 'text-white/80' : 'text-purple-600/80'}`}>{message.type === 'user' ? '나' : 'AI 친구'}</span>
+                        <span className={`text-xs ml-2 ${message.type === 'user' ? 'text-white/60' : 'text-gray-500/80'}`}>{message.timestamp.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       <div className="text-sm leading-relaxed break-words">
                         {message.text}
@@ -677,7 +681,7 @@ const RealtimeChat: React.FC = () => {
             </div>
 
             {/* 하단 정보 */}
-            <div className="p-4 bg-gray-50 border-t border-gray-200">
+            <div className="p-4 bg-gray-50/70 border-t border-gray-200 rounded-b-3xl">
               <div className="text-sm text-gray-600 text-center">
                 <div className="flex items-center justify-center space-x-4">
                   <span>메시지: {messages.length}개</span>
