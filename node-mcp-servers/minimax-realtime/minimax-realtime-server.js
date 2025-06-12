@@ -45,13 +45,13 @@ wss.on('connection', (clientWs, req) => {
     minimaxWs.on('open', () => {
         console.log('MiniMax connection established successfully');
         
-        // 1. Send session.update to configure the session with Chinese instructions
+        // 1. Send session.update to configure the session
         minimaxWs.send(JSON.stringify({
             type: messageTypes.SESSION_UPDATE,
             session: {
                 modalities: ["text", "audio"],
-                instructions: "You are an intelligent assistant. Please answer user questions in Chinese.",
-                voice: "female-1",
+                instructions: "You are a helpful AI assistant. Please respond naturally to user requests.",
+                voice: "female-yujie",
                 output_audio_format: "pcm16",
                 temperature: 0.8,
                 max_output_tokens: 4096
@@ -60,16 +60,17 @@ wss.on('connection', (clientWs, req) => {
         
         // Use setTimeout as suggested by user to sequence context creation and response request
         setTimeout(() => {
-            // 2. Add initial context item (system message in Chinese)
+            // 2. Add user message to provide context
             minimaxWs.send(JSON.stringify({
                 type: messageTypes.CONVERSATION_ITEM_CREATE,
                 item: {
                     type: "message",
-                    role: "system",
+                    role: "user",
                     content: [{
-                        type: "text",
-                        text: "You are a helpful AI assistant. Please respond in Chinese."
-                    }]
+                        type: "input_text",
+                        text: "안녕하세요! 자기소개를 한국어로 해주세요."
+                    }],
+                    status: "completed"
                 }
             }));
             
@@ -78,7 +79,7 @@ wss.on('connection', (clientWs, req) => {
                 type: messageTypes.RESPONSE_CREATE
             }));
 
-            console.log('Initial context and response request sent to MiniMax.');
+            console.log('Context and response request sent to MiniMax.');
 
             // Forward connection status to frontend once setup is initiated
             // The actual 'ready' state might depend on Minimax's response (e.g., session.created)
@@ -100,6 +101,86 @@ wss.on('connection', (clientWs, req) => {
             
             // Handle different message types from MiniMax
             switch (message.type) {
+                case responseTypes.SESSION_CREATED:
+                    console.log('Session created with Minimax:', message.session);
+                    // Forward session created to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
+                case responseTypes.SESSION_UPDATED:
+                    console.log('Session updated:', message.session);
+                    // Forward session updated to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
+                case responseTypes.CONVERSATION_ITEM_CREATED:
+                    console.log('Conversation item created:', message.item);
+                    // Forward to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
+                case responseTypes.RESPONSE_CREATED:
+                    console.log('Response created:', message.response);
+                    // Forward to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
+                case responseTypes.RESPONSE_OUTPUT_ITEM_ADDED:
+                    console.log('Response output item added:', message.item);
+                    // Forward to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
+                case responseTypes.RESPONSE_OUTPUT_ITEM_DONE:
+                    console.log('Response output item done:', message.item);
+                    // Forward to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
+                case responseTypes.RESPONSE_TEXT_DELTA:
+                    console.log('Response text delta:', message.delta);
+                    // Forward to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
+                case responseTypes.RESPONSE_TEXT_DONE:
+                    console.log('Response text done:', message.text);
+                    // Forward to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
+                case responseTypes.RESPONSE_AUDIO_TRANSCRIPT_DONE:
+                    console.log('Response audio transcript done:', message.transcript);
+                    // Forward to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
+                case responseTypes.RESPONSE_AUDIO_DONE:
+                    console.log('Response audio done');
+                    // Forward to frontend
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(message));
+                    }
+                    break;
+
                 case responseTypes.RESPONSE_AUDIO_TRANSCRIPT_DELTA:
                     console.log('Received RESPONSE_AUDIO_TRANSCRIPT_DELTA:', message.delta);
                     // Forward transcript delta to frontend
@@ -115,10 +196,18 @@ wss.on('connection', (clientWs, req) => {
                     break;
 
                 case responseTypes.RESPONSE_AUDIO_DELTA:
-                    // Accumulate audio chunks
-                    if (message.delta && message.delta.audio) {
+                    // Forward audio delta to frontend immediately
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify({
+                            type: message.type,
+                            delta: message.delta
+                        }));
+                    }
+                    
+                    // Also accumulate audio chunks for potential later use
+                    if (message.delta) {
                         const audioBuffer = audioBuffers.get(clientWs) || [];
-                        audioBuffer.push(message.delta.audio);
+                        audioBuffer.push(message.delta);
                         audioBuffers.set(clientWs, audioBuffer);
                     }
                     break;
@@ -140,17 +229,22 @@ wss.on('connection', (clientWs, req) => {
                     break;
 
                 case responseTypes.ERROR:
+                    console.error('MiniMax API Error:', JSON.stringify(message, null, 2));
                     // Forward error to frontend
                     if (clientWs.readyState === WebSocket.OPEN) {
                         clientWs.send(JSON.stringify({
                             type: 'error',
                             error: message.error,
-                            message: message.error?.message || 'Unknown error occurred'
+                            message: message.error?.message || message.message || 'Unknown error occurred'
                         }));
                     }
                     break;
 
                 default:
+                    // Log unknown message types for debugging
+                    console.log('Unknown message type from MiniMax:', message.type);
+                    console.log('Full message:', JSON.stringify(message, null, 2));
+                    
                     // Forward any other messages
                     if (clientWs.readyState === WebSocket.OPEN) {
                         clientWs.send(JSON.stringify(message));
@@ -239,24 +333,17 @@ wss.on('connection', (clientWs, req) => {
                                 role: 'user',
                                 content: [
                                     {
-                                        type: 'text',
+                                        type: 'input_text',
                                         text: message.text
                                     }
-                                ]
+                                ],
+                                status: "completed"
                             }
                         }));
                         
                         // Then request a response
                         minimaxWs.send(JSON.stringify({
-                            type: messageTypes.RESPONSE_CREATE,
-                            response: {
-                                modalities: ["text", "audio"],
-                                instructions: "Please respond in Korean.",
-                                voice: "female-1",
-                                output_audio_format: "pcm16",
-                                temperature: 0.7,
-                                max_output_tokens: 2048
-                            }
+                            type: messageTypes.RESPONSE_CREATE
                         }));
                     }
                     break;
@@ -306,7 +393,7 @@ app.get('/health', (req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3003;
+const PORT = 3003;
 server.listen(PORT, () => {
     console.log(`MiniMax realtime chat proxy server running on port ${PORT}`);
     console.log(`WebSocket endpoint: ws://localhost:${PORT}/ws/realtime-chat`);
