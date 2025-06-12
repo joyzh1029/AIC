@@ -1,592 +1,321 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Phone, PhoneOff, Camera, MessageSquare, X, Volume2, VolumeX, ChevronLeft, Square, Loader2, Play } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Mic, MicOff, Phone, PhoneOff, Volume2, VolumeX, Settings, Loader2 } from 'lucide-react';
 
-interface Message {
-  id: string;
-  type: 'user' | 'avatar';
-  text: string;
-  timestamp: Date;
-  isTranslated?: boolean;
-}
-
-const RealtimeChat: React.FC = () => {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [showConversation, setShowConversation] = useState(false);
-  const [currentText, setCurrentText] = useState('원을 터치하여 시작');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
+const RealtimeCallInterface = () => {
   const [isConnected, setIsConnected] = useState(false);
-  const [minimaxConnected, setMinimaxConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [messages, setMessages] = useState([]);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [callDuration, setCallDuration] = useState(0);
   
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const webSocketRef = useRef<WebSocket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const currentAiResponseIdRef = useRef<string | null>(null);
-  const navigate = useNavigate();
+  const wsRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const streamRef = useRef(null);
+  const callStartTimeRef = useRef(null);
+  const audioQueueRef = useRef([]);
+  const isPlayingRef = useRef(false);
+  const mediaRecorderRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
+  // 初始化音频上下文
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Cleanup on component unmount
-  useEffect(() => {
+    audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
     return () => {
-      if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
-        webSocketRef.current.close(1000, 'Component unmounting');
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
     };
   }, []);
 
-  const addMessageToChat = (id: string, type: 'user' | 'avatar', text: string, isDelta: boolean = false) => {
-    setMessages(prevMessages => {
-      if (isDelta) {
-        const existingMessageIndex = prevMessages.findIndex(msg => msg.id === id);
-        if (existingMessageIndex > -1) {
-          const updatedMessages = [...prevMessages];
-          updatedMessages[existingMessageIndex] = {
-            ...updatedMessages[existingMessageIndex],
-            text: updatedMessages[existingMessageIndex].text + text,
-            timestamp: new Date(),
-          };
-          return updatedMessages;
-        }
-      }
-      const existingMessage = prevMessages.find(msg => msg.id === id);
-      if (existingMessage && !isDelta) {
-        return prevMessages.map(msg => 
-          msg.id === id ? { ...msg, text, timestamp: new Date() } : msg
-        );
-      }
-      return [...prevMessages, { id, type, text, timestamp: new Date() }];
-    });
+  // 格式化时长
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const playAudioResponse = async (base64Audio: string) => {
+  const addMessage = useCallback((role, text) => {
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      role,
+      text,
+      timestamp: new Date().toLocaleTimeString()
+    }]);
+  }, []);
+
+  // 断开连接
+  const disconnect = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsConnected(false);
+    setIsConnecting(false);
+    setCallDuration(0);
+    callStartTimeRef.current = null;
+    setAudioLevel(0);
+  }, []);
+
+  // 获取用户媒体流
+  const getUserMedia = async () => {
     try {
-      // 创建音频元素并播放
-      const audio = new Audio(`data:audio/pcm;base64,${base64Audio}`);
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      streamRef.current = stream;
       
-      audio.onplay = () => {
-        setIsSpeaking(true);
-      };
+      const analyser = audioContextRef.current.createAnalyser();
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      source.connect(analyser);
       
-      audio.onended = () => {
-        setIsSpeaking(false);
-        setCurrentText('원을 터치하여 시작');
-      };
-      
-      audio.onerror = (e) => {
-        console.error('Audio playback error:', e);
-        setIsSpeaking(false);
-        
-        // 尝试使用 Web Audio API 播放 PCM 数据
-        try {
-          const audioData = atob(base64Audio);
-          const arrayBuffer = new ArrayBuffer(audioData.length);
-          const uint8Array = new Uint8Array(arrayBuffer);
-          
-          for (let i = 0; i < audioData.length; i++) {
-            uint8Array[i] = audioData.charCodeAt(i);
-          }
-          
-          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-            sampleRate: 24000
-          });
-          
-          const pcm16Data = new Int16Array(arrayBuffer);
-          const audioBuffer = audioContext.createBuffer(1, pcm16Data.length, 24000);
-          const channelData = audioBuffer.getChannelData(0);
-          
-          for (let i = 0; i < pcm16Data.length; i++) {
-            channelData[i] = pcm16Data[i] / 32768.0;
-          }
-          
-          const source = audioContext.createBufferSource();
-          source.buffer = audioBuffer;
-          source.connect(audioContext.destination);
-          source.onended = () => {
-            setIsSpeaking(false);
-            setCurrentText('원을 터치하여 시작');
-          };
-          source.start();
-          setIsSpeaking(true);
-        } catch (fallbackError) {
-          console.error('Web Audio API fallback also failed:', fallbackError);
-          setConnectionError('음성 재생에 실패했습니다.');
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const checkAudioLevel = () => {
+        if (streamRef.current) {
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+          setAudioLevel(average / 255);
+          requestAnimationFrame(checkAudioLevel);
         }
       };
+      checkAudioLevel();
       
-      await audio.play();
+      return stream;
     } catch (error) {
-      console.error('Error playing audio:', error);
-      setConnectionError('AI 오디오 재생에 실패했습니다.');
-      setIsSpeaking(false);
+      console.error('获取麦克风失败:', error);
+      addMessage('error', '获取麦克风失败，请检查权限');
+      throw error;
     }
   };
 
-  const handleMainButtonClick = async () => {
-    if (isRecording) {
-      // Stop recording
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-        
-        // 사용자 음성 메시지 추가
-        const userMessageId = `user-${Date.now()}`;
-        addMessageToChat(userMessageId, 'user', '🎤 음성 메시지', false);
-      }
-      setIsRecording(false);
-      setCurrentText('답변 처리 중...');
-    } else {
-      // Start new recording session
-      setIsRecording(true);
-      setConnectionError(null);
-      setCurrentText('Node.js 프록시 연결 중...');
-      currentAiResponseIdRef.current = null;
-      setIsConnected(false);
-      setMinimaxConnected(false);
-
-      const clientId = `user-${Date.now()}`;
-      const wsUrl = `ws://localhost:3003/ws/realtime-chat?client_id=${clientId}`;
-      console.log('Attempting to connect to WebSocket:', wsUrl);
+  // 播放音频队列
+  const playAudioQueue = useCallback(async () => {
+    if (isPlayingRef.current || audioQueueRef.current.length === 0) return;
+    
+    isPlayingRef.current = true;
+    const audioData = audioQueueRef.current.shift();
+    
+    try {
+      const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
       
-      const ws = new WebSocket(wsUrl);
-      webSocketRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('WebSocket connected to Node.js proxy');
-        setIsConnected(true);
+      if (isSpeakerOn) {
+        source.connect(audioContextRef.current.destination);
+      }
+      
+      source.onended = () => {
+        isPlayingRef.current = false;
+        playAudioQueue();
       };
+      
+      source.start();
+    } catch (error) {
+      console.error('音频播放失败:', error);
+      isPlayingRef.current = false;
+      playAudioQueue();
+    }
+  }, [isSpeakerOn]);
 
-      ws.onmessage = async (event) => {
-        let messageData;
-        try {
-          messageData = JSON.parse(event.data as string);
-        } catch (e) {
-          console.error('Failed to parse WebSocket message:', event.data, e);
-          setConnectionError('잘못된 형식의 메시지를 받았습니다.');
-          return;
-        }
-        
-        console.log('Received from Node.js proxy:', messageData);
-
-        switch (messageData.type) {
-          case 'connection_status':
-            if (messageData.connected) {
-              setMinimaxConnected(true);
-              setCurrentText('Minimax 연결됨. 말씀하세요...'); // Default message
-              // If minimax_session_initiated is true, Minimax is likely ready or will be soon
-              if (messageData.minimax_session_initiated) {
-                setCurrentText('Minimax 세션 준비됨. 말씀하세요...');
-              }
-              
-              try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const recorderOptions: MediaRecorderOptions = {};
-                
-                if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-                  recorderOptions.mimeType = 'audio/webm;codecs=opus';
-                } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-                  recorderOptions.mimeType = 'audio/webm';
-                }
-                
-                const recorder = new MediaRecorder(stream, recorderOptions);
-                mediaRecorderRef.current = recorder;
-
-                recorder.ondataavailable = (event) => {
-                  if (event.data.size > 0 && webSocketRef.current?.readyState === WebSocket.OPEN) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      const base64Audio = reader.result as string;
-                      webSocketRef.current?.send(JSON.stringify({
-                        type: 'input_audio_buffer.append',
-                        audio: base64Audio.split(',')[1]
-                      }));
-                    };
-                    reader.readAsDataURL(event.data);
-                  }
-                };
-
-                recorder.onstop = () => {
-                  if (webSocketRef.current?.readyState === WebSocket.OPEN) {
-                    webSocketRef.current?.send(JSON.stringify({ 
-                      type: 'input_audio_buffer.commit' 
-                    }));
-                  }
-                  stream.getTracks().forEach(track => track.stop());
-                };
-                
-                recorder.start(100);
-              } catch (err) {
-                console.error('Error accessing microphone:', err);
-                setConnectionError('마이크 접근 또는 녹음 시작에 실패했습니다.');
-                setIsRecording(false);
-                setCurrentText('마이크 오류');
-              }
-            } else {
-              setCurrentText('Minimax 연결 실패');
-              setConnectionError(messageData.message || 'Minimax 연결에 실패했습니다.');
-              setIsRecording(false);
-              if (ws.readyState === WebSocket.OPEN) ws.close();
-            }
+  // 处理WebSocket消息
+  const handleWebSocketMessage = useCallback((event) => {
+    if (typeof event.data === 'string') {
+      try {
+        const msg = JSON.parse(event.data);
+        switch(msg.type) {
+          case 'transcript':
+            addMessage('user', msg.text);
             break;
-
-          case 'session.created': // Handle session.created from Minimax (via proxy)
-            console.log('Session created with Minimax:', messageData.session);
-            setCurrentText('Minimax 세션 생성됨. 준비 중...');
-            // Further actions can be triggered here if needed, e.g., enabling UI elements
+          case 'status':
+            addMessage('status', msg.message);
             break;
-
-          case 'response.audio_transcript.delta':
-            if (messageData.delta && messageData.delta.text) {
-              if (!currentAiResponseIdRef.current) {
-                currentAiResponseIdRef.current = `ai-${Date.now()}`;
-              }
-              addMessageToChat(currentAiResponseIdRef.current, 'avatar', messageData.delta.text, true);
-            }
-            break;
-
-          case 'response.audio.delta':
-            // 오디오 스트리밍 처리 (필요한 경우)
-            if (messageData.delta && messageData.delta.audio) {
-              console.log('Received audio delta');
-            }
-            break;
-
-          case 'response.done':
-            console.log('Response complete:', messageData);
-            if (messageData.response && messageData.response.output) {
-              const output = messageData.response.output[0];
-              if (output) {
-                if (output.type === 'message' && output.content) {
-                  // 텍스트 응답 처리
-                  const textContent = output.content.find((c: any) => c.type === 'text');
-                  if (textContent && textContent.text) {
-                    const responseId = currentAiResponseIdRef.current || `ai-${Date.now()}`;
-                    addMessageToChat(responseId, 'avatar', textContent.text, false);
-                  }
-                  
-                  // 오디오 응답 처리
-                  const audioContent = output.content.find((c: any) => c.type === 'audio');
-                  if (audioContent && audioContent.audio) {
-                    await playAudioResponse(audioContent.audio);
-                  }
-                }
-              }
-            }
-            setCurrentText('원을 터치하여 시작');
-            break;
-
           case 'error':
-            console.error('Error from proxy/Minimax:', messageData);
-            setConnectionError(`오류: ${messageData.message || messageData.error || '알 수 없는 오류가 발생했습니다.'}`);
-            setCurrentText('오류 발생');
-            setIsRecording(false);
-            if (ws.readyState === WebSocket.OPEN) ws.close();
+            addMessage('error', msg.message);
             break;
-
           default:
-            console.log('Unknown message type:', messageData.type);
+            console.log('收到未知消息:', msg);
         }
+      } catch (error) {
+        console.error('解析消息失败:', error);
+      }
+    } else {
+      audioQueueRef.current.push(event.data);
+      playAudioQueue();
+    }
+  }, [addMessage, playAudioQueue]);
+
+  // 开始音频流
+  const startAudioStream = () => {
+    if (!streamRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
+    const recorder = new MediaRecorder(streamRef.current);
+    mediaRecorderRef.current = recorder;
+    
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0 && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(event.data);
+      }
+    };
+    
+    recorder.start(250);
+  };
+
+  // 连接WebSocket
+  const connectWebSocket = useCallback(async () => {
+    if (wsRef.current) return;
+
+    setIsConnecting(true);
+    
+    try {
+      await getUserMedia();
+      
+      const wsUrl = `ws://localhost:3001`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      
+      ws.onopen = () => {
+        console.log('WebSocket连接成功');
+        setIsConnected(true);
+        setIsConnecting(false);
+        callStartTimeRef.current = Date.now();
+        addMessage('status', '连接成功，请开始说话');
+        startAudioStream();
       };
+
+      ws.onmessage = handleWebSocketMessage;
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setConnectionError('WebSocket 연결 오류가 발생했습니다.');
-        setIsRecording(false);
-        setIsConnected(false);
+        console.error('WebSocket错误:', error);
+        addMessage('error', 'WebSocket连接出错');
+        disconnect();
       };
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        setIsConnected(false);
-        setMinimaxConnected(false);
-        if (isRecording) {
-          setIsRecording(false);
-          setCurrentText('연결이 끊어졌습니다');
-        }
+        addMessage('status', '连接已断开');
+        disconnect();
       };
+
+    } catch (error) {
+      console.error('连接失败:', error);
+      addMessage('error', '无法连接到服务器');
+      setIsConnecting(false);
     }
+  }, [addMessage, disconnect, handleWebSocketMessage]);
+
+  // 切换静音
+  const toggleMute = () => {
+    setIsMuted(prev => {
+      const isMuted = !prev;
+      if (streamRef.current) {
+        streamRef.current.getAudioTracks().forEach(track => {
+          track.enabled = !isMuted;
+        });
+      }
+      return isMuted;
+    });
+  };
+
+  // 切换扬声器
+  const toggleSpeaker = () => {
+    setIsSpeakerOn(!isSpeakerOn);
   };
 
   return (
-    <div className="relative w-full max-w-md mx-auto h-screen bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 overflow-hidden">
-      {/* 오류 메시지 표시 */}
-      {connectionError && (
-        <div className="absolute top-16 left-4 right-4 z-30">
-          <div className="bg-red-500/20 backdrop-blur-sm border border-red-400/40 rounded-2xl p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-red-800 text-sm">{connectionError}</span>
-              <button
-                onClick={() => setConnectionError(null)}
-                className="text-red-600 hover:text-red-800"
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-md mx-auto">
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl overflow-hidden">
+          {/* 通话状态 */}
+          <div className="p-6">
+            <div className="text-center">
+              <div className="text-sm text-white/70 mb-2">
+                {isConnected ? '通话中' : isConnecting ? '连接中...' : '未连接'}
+              </div>
+              <div className="text-4xl font-bold text-white">{formatDuration(callDuration)}</div>
+              
+              {/* 音频电平指示器 */}
+              {isConnected && (
+                <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-green-400 to-blue-400 transition-all duration-100"
+                    style={{ width: `${audioLevel * 100}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 消息区域 */}
+          <div className="h-64 overflow-y-auto p-4 space-y-2 border-y border-white/20">
+            {messages.map(msg => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 상단 네비게이션 바 */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4">
-        {/* 채팅으로 돌아가는 버튼 */}
-        <button
-          onClick={() => navigate('/chat')}
-          className="bg-white/40 backdrop-blur-sm px-4 py-2 rounded-full flex items-center space-x-1 shadow-md hover:bg-white/60 transition-all hover:scale-105"
-          title="채팅으로 돌아가기"
-        >
-          <ChevronLeft className="w-5 h-5 text-gray-700" />
-          <span className="text-sm font-medium text-gray-800">채팅</span>
-        </button>
-
-        {/* 우측 버튼들 */}
-        <div className="flex items-center space-x-2">
-
-          {/* 대화 내용 버튼 */}
-          <button
-            onClick={() => setShowConversation(true)}
-            className="flex items-center space-x-1 bg-white/40 backdrop-blur-sm rounded-full px-4 py-2 text-gray-700 hover:bg-white/60 transition-all hover:scale-105 shadow-md"
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span className="text-sm font-medium">대화 내용</span>
-            {messages.length > 0 && (
-              <span className="ml-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {messages.length}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-      
-      {/* 클릭 가능한 원형 통화 버튼 */}
-      <button
-        onClick={handleMainButtonClick}
-        className="absolute top-24 left-1/2 transform -translate-x-1/2 w-48 h-48 rounded-full focus:outline-none focus:ring-4 focus:ring-cyan-300 transition-all duration-300 hover:scale-105 group"
-      >
-        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-300 via-purple-300 to-purple-400 p-1">
-          <div className="w-full h-full rounded-full bg-gradient-to-br from-purple-200 via-pink-200 to-purple-300 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-transparent rounded-full"></div>
-            
-            <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg
-              ${isRecording ? 'bg-red-500/90 backdrop-blur-sm' :
-                minimaxConnected ? 'bg-green-500/80 backdrop-blur-sm' :
-                'bg-white/40 backdrop-blur-sm group-hover:bg-white/50'
-              }
-            `}>
-              {isRecording ? (
-                <Square className="w-8 h-8 text-white" />
-              ) : minimaxConnected ? (
-                <Mic className="w-8 h-8 text-white" />
-              ) : (
-                <Play className="w-8 h-8 text-gray-700 group-hover:text-gray-800" />
-              )}
-            </div>
-            
-            {isConnected && (
-              <>
-                <div className="absolute inset-4 rounded-full border-2 border-white/30 animate-ping"></div>
-                <div className="absolute inset-8 rounded-full border border-white/20 animate-pulse"></div>
-              </>
-            )}
-          </div>
-        </div>
-      </button>
-
-      {/* 중앙 상태 표시기 */}
-      <div className="absolute top-80 left-1/2 transform -translate-x-1/2 z-10">
-        <div className={`w-3 h-3 rounded-full ${
-          isConnected && minimaxConnected ? 'bg-green-500' : 
-          isConnected ? 'bg-yellow-500' : 'bg-gray-400'
-        } mx-auto mb-2`}></div>
-        <div className="text-center text-gray-600 text-sm font-medium">
-          {isConnected && minimaxConnected ? '대화 중' : 
-           isConnected ? 'MiniMax 연결 중' : '원을 터치하여 시작'}
-        </div>
-      </div>
-
-      {/* 실시간 텍스트 표시 */}
-      <div className="absolute bottom-40 left-4 right-4 z-10">
-        <div className="bg-white/30 backdrop-blur-sm rounded-2xl p-4 min-h-[100px] flex items-center justify-center">
-          <p className="text-gray-800 text-center leading-relaxed">
-            {currentText}
-          </p>
-        </div>
-        {isSpeaking && (
-          <div className="flex justify-center mt-2">
-            <div className="flex space-x-1">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-            </div>
-            <span className="ml-2 text-sm text-gray-600">AI 응답 중...</span>
-          </div>
-        )}
-      </div>
-
-      {/* 하단 컨트롤 버튼 */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center space-x-6 z-10">
-        <button
-          className="w-14 h-14 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center text-gray-700 hover:bg-white/40 transition-all"
-          disabled
-        >
-          <Mic className="w-6 h-6" />
-        </button>
-        <button
-          className="w-14 h-14 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center text-gray-700 hover:bg-white/40 transition-all"
-          disabled
-        >
-          <Camera className="w-6 h-6" />
-        </button>
-        <button
-          className="w-14 h-14 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center text-gray-700 hover:bg-white/40 transition-all"
-          disabled
-        >
-          <Volume2 className="w-6 h-6" />
-        </button>
-      </div>
-
-      {/* 대화 내용 사이드바 */}
-      {showConversation && (
-        <div className="absolute inset-0 z-50 flex">
-          {/* 반투명 배경 (클릭하면 닫기) */}
-          <div 
-            className="flex-1 bg-black/20 backdrop-blur-sm"
-            onClick={() => setShowConversation(false)}
-          />
-          
-          {/* 사이드바 */}
-          <div className="w-80 h-full bg-white/90 backdrop-blur-xl flex flex-col shadow-2xl animate-slide-in-right">
-            {/* 헤더 */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">대화 내용</h2>
-              <button
-                onClick={() => setShowConversation(false)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-            
-            {/* 메시지 목록 */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.length === 0 ? (
-                <div className="text-center text-gray-500 mt-8">
-                  <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p>아직 대화 내용이 없습니다</p>
-                  <p className="text-sm mt-2">음성 대화를 시작해보세요</p>
-                </div>
-              ) : (
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[85%] px-4 py-3 rounded-2xl shadow-sm ${
-                        message.type === 'user'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium opacity-80">
-                          {message.type === 'user' ? '나' : 'AI 친구'}
-                        </span>
-                        <span className="text-xs opacity-70 ml-2">
-                          {message.timestamp.toLocaleTimeString('ko-KR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </span>
-                      </div>
-                      <div className="text-sm leading-relaxed break-words">
-                        {message.text}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-              
-              {/* 실시간 상태 표시 */}
-              {isRecording && (
-                <div className="flex justify-end">
-                  <div className="bg-red-50 border border-red-200 px-4 py-3 rounded-2xl max-w-[85%] shadow-sm">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex space-x-1">
-                        <div className="w-1.5 h-4 bg-red-500 rounded-sm animate-pulse"></div>
-                        <div className="w-1.5 h-6 bg-red-500 rounded-sm animate-pulse" style={{ animationDelay: '0.1s' }}></div>
-                        <div className="w-1.5 h-5 bg-red-500 rounded-sm animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                      </div>
-                      <span className="text-xs text-red-600 font-medium">녹음 중...</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {isSpeaking && (
-                <div className="flex justify-start">
-                  <div className="bg-blue-50 border border-blue-200 px-4 py-3 rounded-2xl max-w-[85%] shadow-sm">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      </div>
-                      <span className="text-xs text-blue-600 font-medium">AI가 말하고 있습니다...</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* 하단 정보 */}
-            <div className="p-4 bg-gray-50 border-t border-gray-200">
-              <div className="text-sm text-gray-600 text-center">
-                <div className="flex items-center justify-center space-x-4">
-                  <span>메시지: {messages.length}개</span>
-                  <span className="flex items-center">
-                    <div className={`w-2 h-2 rounded-full mr-1 ${
-                      isConnected && minimaxConnected ? 'bg-green-500' : 
-                      isConnected ? 'bg-yellow-500' : 'bg-gray-400'
-                    }`}></div>
-                    {isConnected && minimaxConnected ? '연결됨' : 
-                     isConnected ? '연결 중' : '연결 끊김'}
-                  </span>
+                <div
+                  className={`max-w-xs px-4 py-2 rounded-lg ${ 
+                    msg.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : msg.role === 'assistant'
+                      ? 'bg-white/20 text-white'
+                      : msg.role === 'error'
+                      ? 'bg-red-600/50 text-white'
+                      : 'bg-gray-600/50 text-white/70 text-sm'
+                  }`}
+                >
+                  <div>{msg.text}</div>
+                  <div className="text-xs opacity-70 mt-1">{msg.timestamp}</div>
                 </div>
               </div>
+            ))}
+          </div>
+
+          {/* 控制按钮 */}
+          <div className="p-6">
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={toggleMute}
+                disabled={!isConnected}
+                className={`p-4 rounded-full transition-all ${ isConnected ? (isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-white/20 hover:bg-white/30') : 'bg-white/10 cursor-not-allowed' }`}
+              >
+                {isMuted ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
+              </button>
+
+              <button
+                onClick={isConnected ? disconnect : connectWebSocket}
+                disabled={isConnecting}
+                className={`p-6 rounded-full transition-all ${ isConnected ? 'bg-red-600 hover:bg-red-700' : (isConnecting ? 'bg-gray-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700') }`}
+              >
+                {isConnecting ? <Loader2 className="w-8 h-8 text-white animate-spin" /> : (isConnected ? <PhoneOff className="w-8 h-8 text-white" /> : <Phone className="w-8 h-8 text-white" />)}
+              </button>
+
+              <button
+                onClick={toggleSpeaker}
+                disabled={!isConnected}
+                className={`p-4 rounded-full transition-all ${ isConnected ? (isSpeakerOn ? 'bg-white/20 hover:bg-white/30' : 'bg-red-600 hover:bg-red-700') : 'bg-white/10 cursor-not-allowed' }`}
+              >
+                {isSpeakerOn ? <Volume2 className="w-6 h-6 text-white" /> : <VolumeX className="w-6 h-6 text-white" />}
+              </button>
             </div>
           </div>
         </div>
-      )}
 
-      {/* 애니메이션 스타일 */}
-      <style jsx>{`
-        @keyframes slide-in-right {
-          from {
-            transform: translateX(100%);
-          }
-          to {
-            transform: translateX(0);
-          }
-        }
-        
-        .animate-slide-in-right {
-          animation: slide-in-right 0.3s ease-out;
-        }
-      `}</style>
+        <div className="mt-4 text-center text-white/70 text-sm">
+          <p>请确保已允许浏览器访问麦克风权限</p>
+        </div>
+      </div>
     </div>
   );
 };
 
-export default RealtimeChat;
+export default RealtimeCallInterface;
