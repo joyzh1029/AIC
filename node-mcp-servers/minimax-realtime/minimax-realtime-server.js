@@ -51,7 +51,7 @@ wss.on('connection', (clientWs, req) => {
             session: {
                 modalities: ["text", "audio"],
                 instructions: "You are a helpful AI assistant. Please respond naturally to user requests.",
-                voice: "female-yujie",
+                voice: "Korean_WiseElf",
                 output_audio_format: "pcm16",
                 temperature: 0.8,
                 max_output_tokens: 4096
