@@ -54,16 +54,9 @@ const SignUp = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Login attempted with:", { email, password, rememberMe });
-<<<<<<< HEAD
-    // 测试模式：直接登录并跳转
-    navigate('/create-ai-friend');
-=======
-    // Redirect to create AI friend page after login
-    navigate('/chat'); // 파라미터 없이 바로 이동
->>>>>>> origin/jinyeong
+    // Redirect to chat page after login
+    navigate('/chat');
   };
-    // navigate('/create-ai-friend');
-  // };
 
   return (
     <div className="min-h-screen flex">

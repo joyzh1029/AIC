@@ -42,7 +42,7 @@ const CreateAiFriend = () => {
   const handleCreateAiFriend = async () => {
     // If we already have a generated image, navigate to chat
     if (generatedImage) {
-      navigate('/chat');
+      navigate('/select-mbti');
       return;
     }
 
