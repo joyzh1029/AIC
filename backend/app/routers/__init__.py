@@ -15,6 +15,7 @@ from app.routers.camera import router as camera_router
 from app.routers.emotion import router as emotion_router
 from app.routers.schedule_chat import router as schedule_chat_router
 
+from app.routers.user import router as user_router  # 새로 추가
 
 # 모든 라우터 등록하기
 # api_router.include_router(avatar_router)
@@ -23,6 +24,7 @@ api_router.include_router(camera_router)
 api_router.include_router(emotion_router)
 api_router.include_router(schedule_chat_router)
 
+api_router.include_router(user_router)  # 새로 추가
 
 # main.py에서 한 번에 등록할 수 있도록 모든 라우터 내보내기
 __all__ = ["api_router"]

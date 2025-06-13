@@ -20,6 +20,17 @@ logging.basicConfig(
         logging.StreamHandler()  # Ensures logs go to the console
     ]
 )
+# 코어 모듈 임포트
+from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
+from app.core.global_instances import set_global_analyzer, set_global_models
+from app.nlp.llm import configure_gemini # ✨ configure_gemini 임포트 추가
+
+# FastAPI 앱 초기화
+app = FastAPI(
+    title="AIC API",
+    description="AI Companion Backend API",
+    version="1.0.0"
+)
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -151,6 +162,26 @@ async def health_check():
     }
 
 # 이전 이벤트 핸들러는 lifespan 컨텍스트 매니저로 대체되었습니다
+# FastAPI 앱 실행 (uvicorn에서 실행할 때 사용)
+@app.on_event("startup")
+async def startup_event():
+    # 모델 로딩
+    global processor, vlm_model, device, whisper_model
+    processor, vlm_model, device, whisper_model = initialize_models()
+    set_global_models(vlm_model, processor, device, whisper_model)
+
+    # 분석 스레드 시작
+    global analyzer
+    analyzer = start_background_threads(vlm_model, processor, device, whisper_model)
+    set_global_analyzer(analyzer)
+    
+    # ✨ Gemini API 및 모델 초기화
+    configure_gemini() # ✨ 이 줄 추가
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    # 스레드 종료 이벤트 설정
+    shutdown_threads()
 
 # 애플리케이션 직접 실행 시
 if __name__ == "__main__":
