@@ -499,6 +499,11 @@ const ChatInterface = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
   
   // 통합된 상태 관리
   const [chatState, setChatState] = useState<ChatState>({
@@ -509,7 +514,6 @@ const ChatInterface = () => {
   });
   
   const [messages, setMessages] = useState<Message[]>([]);
-  
   const [inputMessage, setInputMessage] = useState("");
   const [showTodoistPanel, setShowTodoistPanel] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -518,7 +522,8 @@ const ChatInterface = () => {
   const [cameraStreamUrl, setCameraStreamUrl] = useState("");
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
   const [searchEffort, setSearchEffort] = useState<"low" | "medium" | "high">("medium");
-  
+  const [capturedImageBlob, setCapturedImageBlob] = useState<Blob | null>(null);
+
   // Custom search stream hook
   const searchStream = useSearchStream({
     apiUrl: "http://localhost:8181",
@@ -601,7 +606,6 @@ const ChatInterface = () => {
 
         const mbtiData = await response.json();
         
-        // Use the initial message from the backend
         setMessages([
           {
             id: "init-ai-message",
@@ -612,7 +616,6 @@ const ChatInterface = () => {
           }
         ]);
 
-        // Store AI persona for future use in conversations
         setChatState(prev => ({
           ...prev,
           aiPersona: mbtiData.ai_persona,
@@ -621,7 +624,6 @@ const ChatInterface = () => {
 
       } catch (error) {
         console.error('MBTI 페르소나 로딩 실패:', error);
-        // Fallback to a simple message if API fails
         const fallbackMessage = `안녕하세요, ${params.aiName}입니다. 당신의 MBTI가 ${params.userMbti}이고, 우리는 ${params.relationshipType}(으)로 설정되었네요. 만나서 반갑습니다! 앞으로 어떤 이야기를 나눠볼까요?`;
         
         setMessages([
@@ -644,225 +646,180 @@ const ChatInterface = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // API 호출 헬퍼 함수
-  const apiCall = useCallback(async (endpoint: string, data?: any) => {
+  // 시작 녹음
+  const startRecording = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        ...(data && { body: JSON.stringify(data) })
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || `요청 실패: ${endpoint}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error(`API 호출 실패 (${endpoint}):`, error);
-      throw error;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        audioChunksRef.current.push(e.data);
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+    } catch (err) {
+      toast.error("마이크를 사용할 수 없습니다");
     }
-  }, []);
-
-  // 메시지 추가 헬퍼
-  const addMessage = useCallback((text: string, sender: "user" | "ai", extra?: Partial<Message>) => {
-    const message: Message = {
-      id: Date.now().toString(),
-      sender,
-      text,
-      time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
-      messageType: "chat",
-      ...extra
-    };
-    setMessages(prev => [...prev, message]);
-    return message;
-  }, []);
-
-  const addSplitMessages = useCallback((response: string, sender: "user" | "ai", delay: number = 1000) => {
-    const parts = response.split('[분할]').map(part => part.trim()).filter(part => part.length > 0);
-  
-    parts.forEach((part, index) => {
-      setTimeout(() => {
-        addMessage(part, sender);
-      }, index * delay);
-    });
-  }, [addMessage]);
-
-  const isSearchQuery = (text: string): boolean => {
-    const searchKeywords = [
-      '검색', '찾아', '알아봐', '정보', '뭐야', '무엇', '어떻게',
-      'search', 'find', 'look up', '조사', '확인해', '알려줘',
-      '최신', '뉴스', '현재', '트렌드', '동향'
-    ];
-    
-    return searchKeywords.some(keyword => text.toLowerCase().includes(keyword));
   };
 
-  // 카메라 제어
-  const toggleCamera = useCallback(async () => {
-    if (isCapturing) {
-      await apiCall('/api/camera/stop');
-      setShowCameraPreview(false);
-      setIsCapturing(false);
-      setCameraStreamUrl("");
-    } else {
+  // 녹음 중지
+  const stopRecording = (): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder) return resolve(new Blob());
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+        resolve(audioBlob);
+      };
+
+      recorder.stop();
+
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((track) => track.stop());
+        audioStreamRef.current = null;
+      }
+    });
+  };
+
+  // 시작 카메라
+  const startCamera = async () => {
+    try {
       setIsCapturing(true);
-      toast.info('카메라 준비 중...');
-      await apiCall('/api/camera/start');
-      setCameraStreamUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/camera/stream`);
       setShowCameraPreview(true);
-    }
-  }, [isCapturing, apiCall]);
 
-  // 사진 촬영
-  const capturePhoto = useCallback(async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      toast.error("카메라를 사용할 수 없습니다");
+      setIsCapturing(false);
+      setShowCameraPreview(false);
+    }
+  };
+
+  // 촬영
+  const capturePhoto = async () => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+
+    if (!canvas || !video) return;
+
+    const context = canvas.getContext("2d");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageBlob = await new Promise<Blob>((resolve) =>
+      canvas.toBlob((blob) => resolve(blob!), "image/png")
+    );
+
+    setCapturedImageBlob(imageBlob);
+    await startRecording();
+    toast.info("녹음 시작! 종료하려면 카메라를 닫으세요.");
+  };
+
+  // 비디오 스트림 중지
+  const stopVideoStream = () => {
+    const video = videoRef.current;
+    if (video && video.srcObject) {
+      const stream = video.srcObject as MediaStream;
+      stream.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+    }
+  };
+
+  // 카메라 중지
+  const stopCamera = async () => {
+    stopVideoStream();
+    setShowCameraPreview(false);
+    setCameraStreamUrl("");
+    setIsCapturing(false);
+
+    const audioBlob = await stopRecording();
+    if (!capturedImageBlob) return;
+
+    // 감정 분석 요청
+    const formData = new FormData();
+    formData.append("image", capturedImageBlob, "image.png");
+    formData.append("audio", audioBlob, "audio.webm");
+    formData.append("text", inputMessage);
+
     try {
-      const data = await apiCall('/api/camera/capture');
-      
-      if (data.success) {
-        addMessage("[사진을 전송했습니다]", "user", { image: data.image });
-        
-        if (data.emotion) {
-          setChatState(prev => ({ ...prev, currentEmotion: data.emotion }));
-        }
-        
-        // AI 응답 요청
-        const chatData = await apiCall('/api/chat', {
-          messages: [
-            {
-              role: "user",
-              content: `[사진 전송 - 감정: ${data.emotion}]`,
-              timestamp: Date.now() / 1000
-            }
-          ],
-          user_id: "user123",
-          ai_id: "ai_friend_001",
-          user_mbti: chatState.userMbti,
-          relationship_type: chatState.relationshipType,
-          ai_name: chatState.aiName,
-          context: { emotion: data.emotion }
-        });
-        
-        // [분할] 처리
-        if (chatData.response && chatData.response.includes('[분할]')) {
-          addSplitMessages(chatData.response, "ai");
-        } else {
-          addMessage(chatData.response || "응답을 받지 못했습니다.", "ai");
-        }
-        
-        await toggleCamera();
-      }
-    } catch (error) {
-      toast.error('사진 촬영에 실패했습니다.');
-    }
-  }, [apiCall, addMessage, chatState, toggleCamera, addSplitMessages]);
-
-  const handleSearchWithLangGraph = useCallback(
-    (query: string) => {
-      setProcessedEventsTimeline([]);
-      
-      let initial_search_query_count = 0;
-      let max_research_loops = 0;
-      switch (searchEffort) {
-        case "low":
-          initial_search_query_count = 1;
-          max_research_loops = 1;
-          break;
-        case "medium":
-          initial_search_query_count = 3;
-          max_research_loops = 3;
-          break;
-        case "high":
-          initial_search_query_count = 5;
-          max_research_loops = 10;
-          break;
-      }
-
-      const searchMessages: SearchStreamMessage[] = [
-        {
-          type: "human",
-          content: query,
-          id: Date.now().toString(),
-        },
-      ];
-      
-      searchStream.submit({
-        messages: searchMessages,
-        initial_search_query_count: initial_search_query_count,
-        max_research_loops: max_research_loops,
-        reasoning_model: "gpt-4",
+      const res = await fetch("http://localhost:8181/api/conversation/respond", {
+        method: "POST",
+        body: formData,
       });
-    },
-    [searchStream, searchEffort]
-  );
 
-  // 메시지 전송
-  const handleSendMessage = useCallback(async (messageText?: string, messageType: "chat" | "search" | "schedule" | "todoist" = "chat") => {
-    const textToSend = messageText || inputMessage.trim();
-    if (!textToSend) return;
+      const data = await res.json();
 
-    // 사용자 메시지 추가
-    const userMessage = addMessage(textToSend, "user", { messageType });
-    setInputMessage("");
-
-    try {
-      if (messageType === "search" || isSearchMode) {
-        // 검색 모드 처리
-        const searchMessages = [
-          ...searchStream.messages,
-          { type: "human" as const, content: textToSend, id: Date.now().toString() }
-        ];
-
-        await searchStream.submit({
-          messages: searchMessages,
-          initial_search_query_count: searchEffort === "low" ? 1 : searchEffort === "medium" ? 2 : 3,
-          max_research_loops: searchEffort === "low" ? 1 : searchEffort === "medium" ? 2 : 3,
-          reasoning_model: "gpt-4o-mini"
-        });
-      } else if (messageType === "schedule" || isSearchQuery(textToSend)) {
-        // 일정 관리 처리
-        const response = await apiCall('/api/schedule/chat', {
-          user_id: "user123",
-          text: textToSend
-        });
-
-        if (response?.response) {
-          addSplitMessages(response.response, "ai");
-        } else {
-          addMessage("일정 처리 중 오류가 발생했습니다.", "ai");
-        }
-      } else {
-        // 일반 채팅 처리 - AI 페르소나 정보 포함
-        const chatData = {
-          messages: [
-            {
-              role: "user",
-              content: textToSend
-            }
-          ],
-          user_id: "user123",
-          ai_id: "ai456",
-          // AI 페르소나 정보 추가
-          ai_persona: chatState.aiPersona,
-          ai_mbti: chatState.aiMbti,
-          user_mbti: chatState.userMbti,
-          relationship_type: chatState.relationshipType
+      if (data.success) {
+        // 사용자 메시지 추가
+        const userMessage: Message = {
+          id: Date.now().toString(),
+          sender: "user",
+          text: inputMessage,
+          time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+          image: URL.createObjectURL(capturedImageBlob),
+          messageType: "chat"
         };
+        setMessages(prev => [...prev, userMessage]);
 
-        const response = await apiCall('/api/chat', chatData);
-        
-        if (response?.response) {
-          addSplitMessages(response.response, "ai");
-        } else {
-          addMessage("죄송합니다. 응답을 생성하는데 문제가 발생했습니다.", "ai");
-        }
+        // AI 응답 추가
+        const aiMessage: Message = {
+          id: Date.now().toString(),
+          sender: "ai",
+          text: data.response,
+          time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+          messageType: "chat"
+        };
+        setMessages(prev => [...prev, aiMessage]);
+
+        setInputMessage("");
+      } else if (data.mode === "search_detected") {
+        toast.info("🔎 검색 질문으로 인식되었어요. 정보를 찾아볼게요...");
+        await sendSearchQuery(data.text);
+      } else {
+        toast.error("감정 분석 실패: " + (data.error || "알 수 없는 오류"));
       }
-    } catch (error) {
-      console.error('메시지 전송 실패:', error);
-      addMessage("메시지 전송 중 오류가 발생했습니다. 다시 시도해주세요.", "ai");
+    } catch (err) {
+      console.error("감정 분석 API 오류:", err);
+      toast.error("서버 통신 실패");
     }
-  }, [inputMessage, isSearchMode, searchStream, searchEffort, apiCall, addMessage, addSplitMessages, chatState]);
+  };
+
+  // 검색 쿼리 전송
+  const sendSearchQuery = async (queryText: string) => {
+    try {
+      const res = await fetch("http://localhost:8181/search/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: queryText }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        const aiMessage: Message = {
+          id: Date.now().toString(),
+          sender: "ai",
+          text: data.response,
+          time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+          messageType: "search"
+        };
+        setMessages(prev => [...prev, aiMessage]);
+      } else {
+        toast.error("검색 실패: " + (data.message || "결과 없음"));
+      }
+    } catch (err) {
+      console.error("검색 요청 오류:", err);
+      toast.error("검색 요청 실패");
+    }
+  };
 
   // TTS 재생
   const playTTS = useCallback(async (text: string) => {
@@ -883,6 +840,101 @@ const ChatInterface = () => {
       console.error('음성 재생 실패:', error);
     }
   }, []);
+
+  // 메시지 전송
+  const handleSendMessage = useCallback(async (messageText?: string, messageType: "chat" | "search" | "schedule" | "todoist" = "chat") => {
+    const textToSend = messageText || inputMessage.trim();
+    if (!textToSend) return;
+
+    // 사용자 메시지 추가
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      sender: "user",
+      text: textToSend,
+      time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+      messageType
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage("");
+
+    try {
+      if (messageType === "search" || isSearchMode) {
+        // 검색 모드 처리
+        const searchMessages = [
+          ...searchStream.messages,
+          { type: "human" as const, content: textToSend, id: Date.now().toString() }
+        ];
+
+        await searchStream.submit({
+          messages: searchMessages,
+          initial_search_query_count: searchEffort === "low" ? 1 : searchEffort === "medium" ? 2 : 3,
+          max_research_loops: searchEffort === "low" ? 1 : searchEffort === "medium" ? 2 : 3,
+          reasoning_model: "gpt-4o-mini"
+        });
+      } else if (messageType === "schedule") {
+        // 일정 관리 처리
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/schedule/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: "user123",
+            text: textToSend
+          })
+        });
+
+        const data = await response.json();
+        if (data?.response) {
+          const aiMessage: Message = {
+            id: Date.now().toString(),
+            sender: "ai",
+            text: data.response,
+            time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+            messageType: "schedule"
+          };
+          setMessages(prev => [...prev, aiMessage]);
+        } else {
+          toast.error("일정 처리 중 오류가 발생했습니다.");
+        }
+      } else {
+        // 일반 채팅 처리
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: "user",
+                content: textToSend
+              }
+            ],
+            user_id: "user123",
+            ai_id: "ai456",
+            ai_persona: chatState.aiPersona,
+            ai_mbti: chatState.aiMbti,
+            user_mbti: chatState.userMbti,
+            relationship_type: chatState.relationshipType
+          })
+        });
+
+        const data = await response.json();
+        if (data?.response) {
+          const aiMessage: Message = {
+            id: Date.now().toString(),
+            sender: "ai",
+            text: data.response,
+            time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+            messageType: "chat"
+          };
+          setMessages(prev => [...prev, aiMessage]);
+        } else {
+          toast.error("응답을 생성하는데 문제가 발생했습니다.");
+        }
+      }
+    } catch (error) {
+      console.error('메시지 전송 실패:', error);
+      toast.error("메시지 전송 중 오류가 발생했습니다. 다시 시도해주세요.");
+    }
+  }, [inputMessage, isSearchMode, searchStream, searchEffort, chatState]);
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -917,14 +969,11 @@ const ChatInterface = () => {
               <h3 className="text-lg font-medium">카메라 미리보기</h3>
               <p className="text-sm text-gray-500">원하는 각도에서 사진을 촬영하세요</p>
             </div>
-            <img 
-              src={cameraStreamUrl} 
-              alt="카메라 미리보기" 
-              className="w-full h-auto rounded-lg mb-4"
-            />
+            <video ref={videoRef} autoPlay playsInline className="w-full h-auto rounded-lg mb-4" />
+            <canvas ref={canvasRef} style={{ display: "none" }} />
             <div className="flex justify-between">
               <button 
-                onClick={toggleCamera}
+                onClick={stopCamera}
                 className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg"
               >
                 취소
@@ -1096,7 +1145,7 @@ const ChatInterface = () => {
               </button>
               <button 
                 className="p-2 hover:bg-gray-100 rounded-full mr-1"
-                onClick={toggleCamera}
+                onClick={startCamera}
                 disabled={isCapturing}
                 title="사진 전송"
               >

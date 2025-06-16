@@ -18,23 +18,32 @@ def load_smol_vlm():
     ).to(DEVICE)
     return processor, model, DEVICE
 
-def analyze_face_emotion(image: Image.Image, processor, model, device) -> str:
-    # 장면/상황에 대한 설명을 요청하는 멀티모달 프롬프트 구성
-    messages = [{
-        "role": "user",
-        "content": [
-            {"type": "image"},
-            {"type": "text", "text": "Summerize the atmosphere and what is happening in the scene."}
-        ]
-    }]
-    prompt = processor.apply_chat_template(messages, add_generation_prompt=True)
+def summarize_scene(image: Image.Image, processor, model, device) -> str:
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": "Describe the scene. Summerize the description including important keywords."}
+            ]
+        }
+    ]
 
-    # 이미지 + 텍스트 프롬프트를 모델 입력으로 변환
-    inputs = processor(text=prompt, images=[image], return_tensors="pt").to(device)
+    # 1. Chat 템플릿을 텍스트 prompt로 생성
+    prompt = processor.apply_chat_template(
+        messages,
+        add_generation_prompt=True
+    )
 
-    # 결과 생성
-    ids = model.generate(**inputs, max_new_tokens=500)
-    text = processor.batch_decode(ids, skip_special_tokens=True)
+    # 2. prompt와 image를 processor로 encode (여기서만 images 전달)
+    inputs = processor(
+        text=prompt,
+        images=[image],
+        return_tensors="pt"
+    ).to(device)
 
-    # 텍스트 요약 결과 반환
-    return text[0].strip()
+    # 3. 모델 생성
+    ids = model.generate(**inputs, max_new_tokens=100)
+    decoded = processor.batch_decode(ids, skip_special_tokens=True)
+
+    return decoded[0].strip() if decoded else "No scene description detected."

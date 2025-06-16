@@ -1,5 +1,5 @@
-# app/audio/stt.py
-# Whisper로 마이크 입력을 텍스트로 변환하고, 목소리 억양 감정을 추출
+# core/stt.py
+# Whisper로 마이크 입력을 텍스트로 변환 (STT 전용)
 
 import whisper
 import sounddevice as sd
@@ -7,8 +7,7 @@ import soundfile as sf
 import tempfile
 import torch
 
-from app.emotion.ser_emotion import analyze_voice_emotion_korean as analyze_voice_emotion
-
+# Whisper 모델 로딩 함수
 def load_whisper_model(model_size="base"):
     print("🔊 Whisper 모델 로딩 중...")
 
@@ -23,15 +22,17 @@ def load_whisper_model(model_size="base"):
 
     return model
 
-def transcribe_stream(model, duration=3, fs=16000):
+# 마이크로부터 음성 녹음하고 파일 경로 반환
+def record_audio(duration=3, fs=16000):
     print("🎙️ 음성 녹음 중...")
     audio = sd.rec(int(duration * fs), samplerate=fs, channels=1)
     sd.wait()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
         sf.write(f.name, audio, fs)
+        return f.name  # 파일 경로 반환
 
-        text = model.transcribe(f.name).get("text", "").strip()
-        voice_emotion = analyze_voice_emotion(f.name)
+# 주어진 음성 파일로부터 텍스트 추출
+def transcribe_audio(model, file_path):
+    return model.transcribe(file_path).get("text", "").strip()
 
-    return text, voice_emotion

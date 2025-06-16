@@ -77,11 +77,12 @@ async def chat_endpoint(request: ChatRequest):
 
 
         # 응답 생성
-        response_text = await generate_response(
-            emotion=emotion,
-            user_text=user_text,
-            context=context,
-            ai_mbti_persona=ai_persona_text # ✨ MBTI 페르소나 전달
+        response_text = generate_response(
+            face_emotion,
+            voice_emotion,
+            context.get("location_scene", "실내, 책상 앞"),
+            user_text,
+            context
         )
         logging.info(f"LLM generated response: {response_text}")
 

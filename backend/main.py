@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
 # 환경 변수 로드
-load_dotenv()
+load_dotenv(override=True)  # Force reload environment variables
 
 # --- Logging Configuration ---
 logging.basicConfig(
@@ -20,36 +20,34 @@ logging.basicConfig(
         logging.StreamHandler()  # Ensures logs go to the console
     ]
 )
-# 코어 모듈 임포트
-from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
-from app.core.global_instances import set_global_analyzer, set_global_models
-from app.nlp.llm import configure_gemini # Gemini API 구성 추가
-
-# FastAPI 앱 초기화
-app = FastAPI(
-    title="AIC API",
-    description="AI Companion Backend API",
-    version="1.0.0"
-)
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
 logger.info("Logging configured.")
 
-# Add current directory to Python path for relative imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add FFmpeg to PATH
+FFMPEG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ffmpeg")
+if os.path.exists(FFMPEG_DIR):
+    os.environ["PATH"] = FFMPEG_DIR + os.pathsep + os.environ["PATH"]
+    logger.info(f"Added FFmpeg directory to PATH: {FFMPEG_DIR}")
+
+# Add backend directory to Python path for relative imports
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.dirname(BACKEND_DIR)
+sys.path.insert(0, PARENT_DIR)  # Add parent directory to path
+sys.path.insert(0, BACKEND_DIR)  # Add backend directory to path
+logger.info(f"Added {BACKEND_DIR} to Python path")
 
 # 코어 모듈 임포트
 try:
     from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
     logger.info("Core startup modules imported successfully")
-except ImportError:
-    logger.warning("Core startup modules not found or incomplete")
+except ImportError as e:
+    logger.warning(f"Core startup modules not found or incomplete: {str(e)}")
     initialize_models = start_background_threads = initialize_directories = shutdown_threads = None
 
 # WebSocket 라우터 가져오기
 try:
-    # 새 버전 구조화된 라우터
     from app.websocket import websocket_router
     logger.info("WebSocket router imported successfully.")
 except ImportError:
@@ -69,13 +67,21 @@ async def lifespan(app: FastAPI):
     # 시작 시 작업
     logger.info("AI Companion API 서버 시작 중...")
     
+    # Verify Google API Key
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        logger.error("GOOGLE_API_KEY is not set in environment variables")
+        raise RuntimeError("GOOGLE_API_KEY is required but not set")
+    logger.info(f"GOOGLE_API_KEY is present (length: {len(api_key)})")
+    
     # Gemini API 구성 (가장 먼저 실행)
     try:
+        from app.nlp.llm import configure_gemini
         configure_gemini()
         logger.info("Gemini API 구성 완료")
     except Exception as e:
         logger.error(f"Gemini API 구성 실패: {str(e)}")
-        # Gemini 구성 실패해도 서버는 계속 실행
+        raise  # Re-raise the exception to prevent server startup with invalid configuration
     
     if initialize_directories:
         BASE_DIR = initialize_directories()
@@ -93,6 +99,7 @@ async def lifespan(app: FastAPI):
             logger.info("Background threads started")
         except Exception as e:
             logger.error(f"Error initializing models or threads: {str(e)}")
+            raise  # Re-raise the exception to prevent server startup with invalid models
     else:
         logger.warning("Model initialization or thread starting functions not available")
     
@@ -108,7 +115,6 @@ async def lifespan(app: FastAPI):
             logger.error(f"Error shutting down threads: {str(e)}")
 
 # FastAPI application
-# FastAPI 애플리케이션 설정
 app = FastAPI(
     title="AI Companion API",
     description="AI Companion Backend API with Schedule Management and Realtime Chat",
@@ -161,36 +167,16 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    api_key = os.getenv("GOOGLE_API_KEY")
     return {
         "status": "healthy",
         "service": "ai-companion",
         "environment": {
-            "google_api_key": "configured" if os.getenv("GOOGLE_API_KEY") else "missing"
+            "google_api_key": "configured" if api_key else "missing",
+            "api_key_length": len(api_key) if api_key else 0
         },
         "message": "서버가 정상적으로 실행 중입니다."
     }
-
-# 이전 이벤트 핸들러는 lifespan 컨텍스트 매니저로 대체되었습니다
-# FastAPI 앱 실행 (uvicorn에서 실행할 때 사용)
-@app.on_event("startup")
-async def startup_event():
-    # 모델 로딩
-    global processor, vlm_model, device, whisper_model
-    processor, vlm_model, device, whisper_model = initialize_models()
-    set_global_models(vlm_model, processor, device, whisper_model)
-
-    # 분석 스레드 시작
-    global analyzer
-    analyzer = start_background_threads(vlm_model, processor, device, whisper_model)
-    set_global_analyzer(analyzer)
-    
-    # Gemini API 및 모델 초기화
-    configure_gemini() 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    # 스레드 종료 이벤트 설정
-    shutdown_threads()
 
 # 애플리케이션 직접 실행 시
 if __name__ == "__main__":
@@ -198,15 +184,7 @@ if __name__ == "__main__":
     
     # 필요한 환경 변수 확인
     if not os.getenv("GOOGLE_API_KEY"):
-        print(" 경고: GOOGLE_API_KEY가 설정되지 않았습니다!")
-        print(".env 파일에 설정하세요: GOOGLE_API_KEY=your_key_here")
+        logger.error("GOOGLE_API_KEY environment variable is not set")
+        sys.exit(1)
     
-    # FastAPI 앱 실행
-    print(" 서버 시작 - http://localhost:8181")
-    logger.info("Starting AI Companion API server...")
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8181,
-        reload=True
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)
