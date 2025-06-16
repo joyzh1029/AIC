@@ -23,7 +23,7 @@ logging.basicConfig(
 # 코어 모듈 임포트
 from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
 from app.core.global_instances import set_global_analyzer, set_global_models
-from app.nlp.llm import configure_gemini # ✨ configure_gemini 임포트 추가
+from app.nlp.llm import configure_gemini # Gemini API 구성 추가
 
 # FastAPI 앱 초기화
 app = FastAPI(
@@ -68,6 +68,15 @@ except ImportError:
 async def lifespan(app: FastAPI):
     # 시작 시 작업
     logger.info("AI Companion API 서버 시작 중...")
+    
+    # Gemini API 구성 (가장 먼저 실행)
+    try:
+        configure_gemini()
+        logger.info("Gemini API 구성 완료")
+    except Exception as e:
+        logger.error(f"Gemini API 구성 실패: {str(e)}")
+        # Gemini 구성 실패해도 서버는 계속 실행
+    
     if initialize_directories:
         BASE_DIR = initialize_directories()
         logger.info(f"Directories initialized at {BASE_DIR}")
@@ -175,8 +184,8 @@ async def startup_event():
     analyzer = start_background_threads(vlm_model, processor, device, whisper_model)
     set_global_analyzer(analyzer)
     
-    # ✨ Gemini API 및 모델 초기화
-    configure_gemini() # ✨ 이 줄 추가
+    # Gemini API 및 모델 초기화
+    configure_gemini() 
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -189,11 +198,11 @@ if __name__ == "__main__":
     
     # 필요한 환경 변수 확인
     if not os.getenv("GOOGLE_API_KEY"):
-        print("⚠️  경고: GOOGLE_API_KEY가 설정되지 않았습니다!")
+        print(" 경고: GOOGLE_API_KEY가 설정되지 않았습니다!")
         print(".env 파일에 설정하세요: GOOGLE_API_KEY=your_key_here")
     
     # FastAPI 앱 실행
-    print("🚀 서버 시작 - http://localhost:8181")
+    print(" 서버 시작 - http://localhost:8181")
     logger.info("Starting AI Companion API server...")
     uvicorn.run(
         "main:app",

@@ -69,6 +69,8 @@ interface ChatState {
   relationshipType: string;
   aiName: string;
   currentEmotion: string;
+  aiPersona?: string;
+  aiMbti?: string;
 }
 
 // Custom hook for search streaming
@@ -506,13 +508,7 @@ const ChatInterface = () => {
     currentEmotion: "neutral"
   });
   
-  const [messages, setMessages] = useState<Message[]>([{
-    id: "1",
-    sender: "ai",
-    text: "안녕, 만나서 반가워! 나는 너의 AI 친구야. 어떻게 지내고 있어?",
-    time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
-    messageType: "chat"
-  }]);
+  const [messages, setMessages] = useState<Message[]>([]);
   
   const [inputMessage, setInputMessage] = useState("");
   const [showTodoistPanel, setShowTodoistPanel] = useState(false);
@@ -525,7 +521,7 @@ const ChatInterface = () => {
   
   // Custom search stream hook
   const searchStream = useSearchStream({
-    apiUrl: "http://localhost:2024",
+    apiUrl: "http://localhost:8181",
     onFinish: (event: any) => {
       console.log("Search finished:", event);
     },
@@ -583,6 +579,64 @@ const ChatInterface = () => {
     };
     
     setChatState(params);
+
+    // Fetch MBTI persona from backend API
+    const fetchMBTIPersona = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/mbti/persona`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_mbti: params.userMbti,
+            relationship_type: params.relationshipType,
+            ai_name: params.aiName
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('MBTI 페르소나를 가져오는데 실패했습니다');
+        }
+
+        const mbtiData = await response.json();
+        
+        // Use the initial message from the backend
+        setMessages([
+          {
+            id: "init-ai-message",
+            sender: "ai",
+            text: mbtiData.initial_message,
+            time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
+            messageType: "chat"
+          }
+        ]);
+
+        // Store AI persona for future use in conversations
+        setChatState(prev => ({
+          ...prev,
+          aiPersona: mbtiData.ai_persona,
+          aiMbti: mbtiData.ai_mbti
+        }));
+
+      } catch (error) {
+        console.error('MBTI 페르소나 로딩 실패:', error);
+        // Fallback to a simple message if API fails
+        const fallbackMessage = `안녕하세요, ${params.aiName}입니다. 당신의 MBTI가 ${params.userMbti}이고, 우리는 ${params.relationshipType}(으)로 설정되었네요. 만나서 반갑습니다! 앞으로 어떤 이야기를 나눠볼까요?`;
+        
+        setMessages([
+          {
+            id: "init-ai-message",
+            sender: "ai",
+            text: fallbackMessage,
+            time: new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true }),
+            messageType: "chat"
+          }
+        ]);
+      }
+    };
+
+    fetchMBTIPersona();
   }, [searchParams]);
 
   // 자동 스크롤
@@ -593,7 +647,7 @@ const ChatInterface = () => {
   // API 호출 헬퍼 함수
   const apiCall = useCallback(async (endpoint: string, data?: any) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${endpoint}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         ...(data && { body: JSON.stringify(data) })
@@ -656,7 +710,7 @@ const ChatInterface = () => {
       setIsCapturing(true);
       toast.info('카메라 준비 중...');
       await apiCall('/api/camera/start');
-      setCameraStreamUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/camera/stream`);
+      setCameraStreamUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/camera/stream`);
       setShowCameraPreview(true);
     }
   }, [isCapturing, apiCall]);
@@ -744,94 +798,76 @@ const ChatInterface = () => {
   );
 
   // 메시지 전송
-  const handleSendMessage = useCallback(async (messageText?: string, messageType?: "todoist") => {
-    const textToSend = messageText || inputMessage;
-    if (!textToSend.trim()) return;
-    
-    // 메시지 타입 결정
-    let type: "chat" | "search" | "schedule" | "todoist" = messageType || "chat";
-    
-    if (!messageType) {
-      const scheduleKeywords = [
-        '일정', '약속', '미팅', '회의', '언제', '몇시', 
-        '스케줄', '만나', '예약', '취소', '팀 회의', '팀회의',
-        'todoist', '할일', '태스크', 'task'
-      ];
-      
-      const isScheduleRelated = scheduleKeywords.some(keyword => textToSend.includes(keyword));
-      const isSearch = isSearchMode || isSearchQuery(textToSend);
-      
-      if (isScheduleRelated) {
-        type = "schedule";
-      } else if (isSearch) {
-        type = "search";
-      }
-    }
-    
+  const handleSendMessage = useCallback(async (messageText?: string, messageType: "chat" | "search" | "schedule" | "todoist" = "chat") => {
+    const textToSend = messageText || inputMessage.trim();
+    if (!textToSend) return;
+
     // 사용자 메시지 추가
-    addMessage(textToSend, "user", { messageType: type });
-    if (!messageText) {
-      setInputMessage("");
-    }
+    const userMessage = addMessage(textToSend, "user", { messageType });
+    setInputMessage("");
 
-    // Handle different message types
-    if (type === "search") {
-      const searchingMessage = addMessage("🔍 검색 중입니다... 잠시만 기다려주세요.", "ai", { messageType: "search" });
+    try {
+      if (messageType === "search" || isSearchMode) {
+        // 검색 모드 처리
+        const searchMessages = [
+          ...searchStream.messages,
+          { type: "human" as const, content: textToSend, id: Date.now().toString() }
+        ];
 
-      try {
-        handleSearchWithLangGraph(textToSend);
-        
-        const checkSearchResults = setInterval(() => {
-          if (searchStream.messages && searchStream.messages.length > 0) {
-            const lastMessage = searchStream.messages[searchStream.messages.length - 1];
-            if (lastMessage.type === "ai" && lastMessage.content) {
-              setMessages(prev => prev.filter(msg => msg.id !== searchingMessage.id));
-              
-              addMessage(lastMessage.content, "ai", { messageType: "search" });
-              clearInterval(checkSearchResults);
-            }
-          }
-        }, 500);
-        
-        setTimeout(() => clearInterval(checkSearchResults), 30000);
-      } catch (error) {
-        console.error('Search error:', error);
-        
-        setMessages(prev => prev.filter(msg => msg.id !== searchingMessage.id));
-        addMessage("죄송합니다. 검색 중 오류가 발생했습니다.", "ai", { messageType: "search" });
-      }
-    } else {
-      // Handle other message types
-      setTimeout(() => {
-        let responseText = "";
-        
-        if (type === "todoist") {
-          responseText = textToSend.includes("완료") 
-            ? "수고했어! 오늘도 할 일을 잘 마무리하고 있구나! 👏" 
-            : "좋아! Todoist에 잘 추가했어. 화이팅! 💪";
-        } else if (type === "schedule") {
-          responseText = "일정 관리는 상단의 녹색 캘린더 아이콘을 클릭해서 Todoist로 관리할 수 있어요! 📅";
+        await searchStream.submit({
+          messages: searchMessages,
+          initial_search_query_count: searchEffort === "low" ? 1 : searchEffort === "medium" ? 2 : 3,
+          max_research_loops: searchEffort === "low" ? 1 : searchEffort === "medium" ? 2 : 3,
+          reasoning_model: "gpt-4o-mini"
+        });
+      } else if (messageType === "schedule" || isSearchQuery(textToSend)) {
+        // 일정 관리 처리
+        const response = await apiCall('/api/schedule/chat', {
+          user_id: "user123",
+          text: textToSend
+        });
+
+        if (response?.response) {
+          addSplitMessages(response.response, "ai");
         } else {
-          const responses = [
-            "그렇구나! 더 자세히 이야기해줄래? 🤔",
-            "흥미로운 이야기네! 어떤 기분이야? 😊",
-            "응, 나도 그렇게 생각해! 💭",
-            "오늘 하루는 어땠어? 특별한 일이 있었니? 🌟"
-          ];
-          responseText = responses[Math.floor(Math.random() * responses.length)];
+          addMessage("일정 처리 중 오류가 발생했습니다.", "ai");
         }
+      } else {
+        // 일반 채팅 처리 - AI 페르소나 정보 포함
+        const chatData = {
+          messages: [
+            {
+              role: "user",
+              content: textToSend
+            }
+          ],
+          user_id: "user123",
+          ai_id: "ai456",
+          // AI 페르소나 정보 추가
+          ai_persona: chatState.aiPersona,
+          ai_mbti: chatState.aiMbti,
+          user_mbti: chatState.userMbti,
+          relationship_type: chatState.relationshipType
+        };
+
+        const response = await apiCall('/api/chat', chatData);
         
-        addMessage(responseText, "ai", { messageType: type });
-      }, 1000);
+        if (response?.response) {
+          addSplitMessages(response.response, "ai");
+        } else {
+          addMessage("죄송합니다. 응답을 생성하는데 문제가 발생했습니다.", "ai");
+        }
+      }
+    } catch (error) {
+      console.error('메시지 전송 실패:', error);
+      addMessage("메시지 전송 중 오류가 발생했습니다. 다시 시도해주세요.", "ai");
     }
-    
-    setIsSearchMode(false);
-  }, [inputMessage, addMessage, isSearchMode, isSearchQuery, handleSearchWithLangGraph, searchStream]);
+  }, [inputMessage, isSearchMode, searchStream, searchEffort, apiCall, addMessage, addSplitMessages, chatState]);
 
   // TTS 재생
   const playTTS = useCallback(async (text: string) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/tts`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
@@ -923,7 +959,9 @@ const ChatInterface = () => {
             <button 
               onClick={() => setIsSearchMode(!isSearchMode)} 
               className={`p-2 rounded-full transition duration-300 ease-in-out ${
-                isSearchMode ? 'bg-purple-100 text-purple-600' : 'hover:bg-gray-100 text-gray-500'
+                isSearchMode 
+                  ? 'bg-purple-100 text-purple-600' 
+                  : 'hover:bg-gray-100 text-gray-500'
               }`}
               title="검색 모드 전환"
             >

@@ -1,8 +1,8 @@
 import os
-from pydantic import BaseModel, Field
 from typing import Any, Optional
 
 from langchain_core.runnables import RunnableConfig
+from pydantic import BaseModel, Field
 
 
 class Configuration(BaseModel):
@@ -16,16 +16,23 @@ class Configuration(BaseModel):
     )
 
     reflection_model: str = Field(
-        default="gemini-2.5-flash-preview-04-17",
+        default="gemini-2.0-flash",
         metadata={
             "description": "The name of the language model to use for the agent's reflection."
         },
     )
 
     answer_model: str = Field(
-        default="gemini-2.5-flash-preview-04-17",
+        default="gemini-2.0-flash",
         metadata={
             "description": "The name of the language model to use for the agent's answer."
+        },
+    )
+
+    reasoning_model: str = Field(
+        default="gemini-2.0-flash",
+        metadata={
+            "description": "The name of the language model to use for the agent's reasoning."
         },
     )
 

@@ -14,6 +14,7 @@ from app.routers.chat import router as chat_router
 from app.routers.camera import router as camera_router
 from app.routers.emotion import router as emotion_router
 from app.routers.schedule_chat import router as schedule_chat_router
+from app.routers.mbti import router as mbti_router
 
 from app.routers.user import router as user_router  # 새로 추가
 
@@ -23,6 +24,7 @@ api_router.include_router(chat_router)
 api_router.include_router(camera_router)
 api_router.include_router(emotion_router)
 api_router.include_router(schedule_chat_router)
+api_router.include_router(mbti_router)
 
 api_router.include_router(user_router)  # 새로 추가
 
