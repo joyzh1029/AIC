@@ -16,7 +16,7 @@ def generate_response(
     scene: str,
     user_text: str,
     context: dict,
-    model_name="gemini-1.5-flash"
+    model_name="gemini-2.0-flash"
 ):
     if "search_raw_list" in context:
         print("🔍 검색 응답 생성")
@@ -25,7 +25,7 @@ def generate_response(
         prompt = (
             f"너는 정보 검색 결과를 요약 및 번역해주는 전문 AI야.\n\n"
             f"사용자의 질문은 다음과 같아:\n"
-            f'"{user_text}"\n\n'
+            f"\"{user_text}\"\n\n"
             f"검색 결과는 아래와 같아:\n"
             f"{combined}\n\n"
             "이 검색 결과들을 항목별로 정돈해서 요약하고, 이해하기 쉽게 한국어로 번역해줘. "
@@ -39,7 +39,7 @@ def generate_response(
             f"- 표정 감정: '{face_emotion}'\n"
             f"- 목소리 감정: '{voice_emotion}'\n"
             f"- 주변 환경은 다음과 같아: '{scene}'\n"
-            f'발화 내용: "{user_text}"\n\n'
+            f"발화 내용: \"{user_text}\"\n\n"
             f"날씨: {context.get('weather', '알 수 없음')}\n"
             f"수면 시간: {context.get('sleep', '알 수 없음')}\n"
             f"스트레스 수준: {context.get('stress', '알 수 없음')}\n"
@@ -48,18 +48,13 @@ def generate_response(
             "마무리로 가벼운 질문 하나도 곁들이면 좋아."
         )
 
-    print("[DEBUG] prompt type:", type(prompt))
-    print("[DEBUG] prompt content:", prompt)
-
-    model = genai.GenerativeModel(model_name)
-    response = model.generate_content(prompt)
-    # 兼容不同返回结构
-    if hasattr(response, 'text'):
-        return response.text
-    elif hasattr(response, 'candidates') and response.candidates:
-        return response.candidates[0].content.parts[0].text
-    else:
-        return str(response)
+    llm = ChatGoogleGenerativeAI(
+        model=model_name,
+        temperature=0.7,
+        api_key=os.getenv("GEMINI_API_KEY"),
+    )
+    response = llm.invoke(prompt)
+    return response.content
 
 
 def generate_search_summary(user_text: str, raw_results: list[str]) -> str:
@@ -75,9 +70,6 @@ def generate_search_summary(user_text: str, raw_results: list[str]) -> str:
         "카테고리(예: 유선 키보드, 무선 키보드 등) 별로 정리하면 더 좋아."
     )
 
-    if not isinstance(prompt, str):
-        raise ValueError(f"Prompt must be a string, got {type(prompt)}: {prompt}")
-
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
         temperature=0.7,
@@ -85,5 +77,3 @@ def generate_search_summary(user_text: str, raw_results: list[str]) -> str:
     )
     response = llm.invoke(prompt)
     return response.content
-
-

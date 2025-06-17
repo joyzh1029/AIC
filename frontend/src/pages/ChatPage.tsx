@@ -685,42 +685,270 @@ const ChatInterface = () => {
     });
   };
 
-  // 시작 카메라
-  const startCamera = async () => {
+  // 카메라 스트림 정리 함수
+  const cleanupCameraStream = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => {
+        track.stop();
+      });
+      videoRef.current.srcObject = null;
+    }
+    setIsCapturing(false);
+    setShowCameraPreview(false);
+  };
+
+  // 시작 카메라 (재시도 로직 포함)
+  const startCamera = async (retryCount = 0) => {
+    const MAX_RETRIES = 2;
+    
     try {
+      // Check if we're on HTTP and not localhost
+      if (window.location.protocol === 'http:' && !window.location.hostname.match(/localhost|127\.0\.0\.1/)) {
+        toast.error("보안 설정으로 인해 카메라에 접근할 수 없습니다. HTTPS를 사용하거나 localhost에서 실행해주세요.");
+        return;
+      }
+
+      // 기존 스트림 정리
+      cleanupCameraStream();
+      
       setIsCapturing(true);
       setShowCameraPreview(true);
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+      let stream;
+      const constraints = [
+        // 1. Try with ideal settings first
+        {
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          } 
+        },
+        // 2. Try with just facingMode
+        {
+          video: { facingMode: 'user' }
+        },
+        // 3. Try with any available camera
+        { video: true }
+      ];
+
+      let lastError;
+      
+      // Try each constraint in order until one works
+      for (const constraint of constraints) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraint);
+          if (stream) break;
+        } catch (err) {
+          console.warn(`Camera access failed with constraints:`, constraint, err);
+          lastError = err;
+          // Wait a bit before trying the next constraint
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
       }
-    } catch (err) {
-      toast.error("카메라를 사용할 수 없습니다");
-      setIsCapturing(false);
-      setShowCameraPreview(false);
+      
+      if (!stream) {
+        throw lastError || new Error('카메라 스트림을 가져올 수 없습니다.');
+      }
+
+      if (!videoRef.current) {
+        throw new Error('비디오 요소를 찾을 수 없습니다.');
+      }
+
+      // Set the stream and wait for it to be ready
+      videoRef.current.srcObject = stream;
+      
+      // Wait for the video to be ready to play
+      await new Promise<void>((resolve, reject) => {
+        if (!videoRef.current) return reject(new Error('비디오 요소를 찾을 수 없습니다.'));
+        
+        const onCanPlay = () => {
+          videoRef.current?.removeEventListener('canplay', onCanPlay);
+          videoRef.current?.removeEventListener('error', onError);
+          resolve();
+        };
+        
+        const onError = (err: Event) => {
+          videoRef.current?.removeEventListener('canplay', onCanPlay);
+          videoRef.current?.removeEventListener('error', onError);
+          reject(new Error(`비디오 재생 오류: ${err}`));
+        };
+        
+        videoRef.current.addEventListener('canplay', onCanPlay, { once: true });
+        videoRef.current.addEventListener('error', onError, { once: true });
+        
+        // Start playing the video
+        videoRef.current.play().catch(reject);
+      });
+      
+      // If we get here, video is playing successfully
+      return;
+      
+      // 카메라가 정상적으로 시작되었을 때만 상태 업데이트
+      setIsCapturing(true);
+      setShowCameraPreview(true);
+      
+    } catch (err: any) {
+      console.error('Camera access error:', err);
+      let errorMessage = '카메라에 접근할 수 없습니다';
+      let showRecovery = false;
+      
+      if (err.name === 'NotAllowedError') {
+        errorMessage = '카메라 접근 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 확인해주세요.';
+      } else if (err.name === 'NotFoundError') {
+        errorMessage = '사용 가능한 카메라를 찾을 수 없습니다. 카메라가 제대로 연결되어 있는지 확인해주세요.';
+        showRecovery = true;
+      } else if (err.name === 'NotReadableError' || err.name === 'NotReadableError DOMException') {
+        errorMessage = (
+          '카메라를 사용할 수 없습니다. 다음을 확인해주세요:\n' +
+          '1. 다른 애플리케이션에서 카메라를 사용 중인지 확인\n' +
+          '2. 카�라를 분리했다가 다시 연결\n' +
+          '3. 컴퓨터를 재시작'
+        );
+        showRecovery = true;
+      } else if (err.message.includes('Permission denied')) {
+        errorMessage = '카메라 접근이 거부되었습니다. 브라우저 설정에서 권한을 확인해주세요.';
+      } else {
+        errorMessage = `카메라 오류: ${err.message || '알 수 없는 오류'}`;
+      }
+      
+      // 오류 메시지 표시
+      toast.error(errorMessage, {
+        duration: 5000,
+        style: {
+          whiteSpace: 'pre-line', // 줄바꿈 적용
+          maxWidth: 'none'
+        }
+      });
+      
+      // 복구 안내 버튼 추가
+      if (showRecovery) {
+        const showTroubleshootingGuide = () => {
+          // React 컴포넌트로 가이드 생성
+          const Guide = () => (
+            <div style={{ padding: '1rem', maxWidth: '400px' }}>
+              <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 'bold' }}>카메라 문제 해결 방법</h3>
+              <ol style={{ margin: '0.5rem 0 0 1rem', paddingLeft: '1rem' }}>
+                <li style={{ marginBottom: '0.5rem' }}>다른 애플리케이션에서 카메라를 사용 중인지 확인하고 모두 종료하세요.</li>
+                <li style={{ marginBottom: '0.5rem' }}>웹 브라우저를 완전히 종료했다가 다시 실행해보세요.</li>
+                <li style={{ marginBottom: '0.5rem' }}>컴퓨터를 재시작해보세요.</li>
+                <li style={{ marginBottom: '0.5rem' }}>브라우저 설정에서 카메라 권한을 확인하고 다시 시도해보세요.</li>
+                <li>다른 카메라를 연결해보세요 (노트북의 경우 외장 카메라).</li>
+              </ol>
+            </div>
+          );
+
+          // 기존 토스트 닫기
+          toast.dismiss();
+          // 안내 메시지 표시 (React 컴포넌트로 렌더링)
+          toast.custom(() => <Guide />, { duration: 10000 });
+        };
+
+        toast('카메라 문제 해결 방법', {
+          description: '카메라 문제 해결을 도와드릴까요?',
+          action: {
+            label: '해결 방법 보기',
+            onClick: showTroubleshootingGuide
+          }
+        });
+      }
+      
+      // 상태 초기화
+      cleanupCameraStream();
     }
   };
 
-  // 촬영
+  // 촬영 및 전송
   const capturePhoto = async () => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
 
-    if (!canvas || !video) return;
+    if (!canvas || !video) {
+      toast.error("카메라를 찾을 수 없습니다");
+      return;
+    }
 
-    const context = canvas.getContext("2d");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    try {
+      // 캔버스에 현재 비디오 프레임 그리기
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("캔버스 컨텍스트를 가져올 수 없습니다");
+      }
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const imageBlob = await new Promise<Blob>((resolve) =>
-      canvas.toBlob((blob) => resolve(blob!), "image/png")
-    );
+      // 캔버스에서 이미지 데이터 가져오기
+      const imageBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("이미지 변환에 실패했습니다"));
+          }
+        }, "image/jpeg", 0.9); // JPEG 형식으로 압축
+      });
 
-    setCapturedImageBlob(imageBlob);
-    await startRecording();
-    toast.info("녹음 시작! 종료하려면 카메라를 닫으세요.");
+      // 이미지 URL 생성
+      const imageUrl = URL.createObjectURL(imageBlob);
+      
+      // 사용자 메시지 생성
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        sender: "user",
+        text: "사진을 보냈습니다",
+        time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+        image: imageUrl,
+        messageType: "chat"
+      };
+
+      // 메시지 목록에 추가
+      setMessages(prev => [...prev, userMessage]);
+      
+      // 서버에 이미지 전송
+      try {
+        const formData = new FormData();
+        formData.append('image', imageBlob, 'photo.jpg');
+        
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/chat/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error('이미지 업로드 실패');
+        }
+        
+        const data = await response.json();
+        
+        // AI 응답 메시지 추가
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          sender: "ai",
+          text: data.response || "사진을 잘 받았어요!",
+          time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+          messageType: "chat"
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+      } catch (uploadError) {
+        console.error("이미지 업로드 오류:", uploadError);
+        toast.error("이미지 전송에 실패했습니다");
+      }
+      
+      // 카메라 미리보기 닫기
+      stopVideoStream();
+      setShowCameraPreview(false);
+      
+      // 사용자에게 알림
+      toast.success("사진이 전송되었습니다");
+      
+    } catch (error) {
+      console.error("사진 촬영 중 오류 발생:", error);
+      toast.error(`사진 촬영에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    }
   };
 
   // 비디오 스트림 중지
@@ -1145,7 +1373,13 @@ const ChatInterface = () => {
               </button>
               <button 
                 className="p-2 hover:bg-gray-100 rounded-full mr-1"
-                onClick={startCamera}
+                onClick={(e) => {
+                  e.preventDefault();
+                  startCamera().catch(err => {
+                    console.error('카메라 시작 중 오류 발생:', err);
+                    toast.error('카메라를 시작하는 중 오류가 발생했습니다.');
+                  });
+                }}
                 disabled={isCapturing}
                 title="사진 전송"
               >
