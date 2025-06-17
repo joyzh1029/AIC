@@ -803,7 +803,7 @@ const ChatInterface = () => {
         errorMessage = (
           '카메라를 사용할 수 없습니다. 다음을 확인해주세요:\n' +
           '1. 다른 애플리케이션에서 카메라를 사용 중인지 확인\n' +
-          '2. 카�라를 분리했다가 다시 연결\n' +
+          '2. 카라를 분리했다가 다시 연결\n' +
           '3. 컴퓨터를 재시작'
         );
         showRecovery = true;
@@ -824,34 +824,23 @@ const ChatInterface = () => {
       
       // 복구 안내 버튼 추가
       if (showRecovery) {
-        const showTroubleshootingGuide = () => {
-          // React 컴포넌트로 가이드 생성
-          const Guide = () => (
-            <div style={{ padding: '1rem', maxWidth: '400px' }}>
-              <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 'bold' }}>카메라 문제 해결 방법</h3>
-              <ol style={{ margin: '0.5rem 0 0 1rem', paddingLeft: '1rem' }}>
-                <li style={{ marginBottom: '0.5rem' }}>다른 애플리케이션에서 카메라를 사용 중인지 확인하고 모두 종료하세요.</li>
-                <li style={{ marginBottom: '0.5rem' }}>웹 브라우저를 완전히 종료했다가 다시 실행해보세요.</li>
-                <li style={{ marginBottom: '0.5rem' }}>컴퓨터를 재시작해보세요.</li>
-                <li style={{ marginBottom: '0.5rem' }}>브라우저 설정에서 카메라 권한을 확인하고 다시 시도해보세요.</li>
-                <li>다른 카메라를 연결해보세요 (노트북의 경우 외장 카메라).</li>
-              </ol>
-            </div>
-          );
+        const showTroubleshootingGuide = () => (
+          <div style={{ padding: '1rem', maxWidth: '400px' }}>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 'bold' }}>카메라 문제 해결 방법</h3>
+            <ol style={{ margin: '0.5rem 0 0 1rem', paddingLeft: '1rem' }}>
+              <li style={{ marginBottom: '0.5rem' }}>다른 애플리케이션에서 카메라를 사용 중인지 확인하고 모두 종료하세요.</li>
+              <li style={{ marginBottom: '0.5rem' }}>웹 브라우저를 완전히 종료했다가 다시 실행해보세요.</li>
+              <li style={{ marginBottom: '0.5rem' }}>컴퓨터를 재시작해보세요.</li>
+              <li style={{ marginBottom: '0.5rem' }}>브라우저 설정에서 카메라 권한을 확인하고 다시 시도해보세요.</li>
+              <li>다른 카메라를 연결해보세요 (노트북의 경우 외장 카메라).</li>
+            </ol>
+          </div>
+        );
 
-          // 기존 토스트 닫기
-          toast.dismiss();
-          // 안내 메시지 표시 (React 컴포넌트로 렌더링)
-          toast.custom(() => <Guide />, { duration: 10000 });
-        };
-
-        toast('카메라 문제 해결 방법', {
-          description: '카메라 문제 해결을 도와드릴까요?',
-          action: {
-            label: '해결 방법 보기',
-            onClick: showTroubleshootingGuide
-          }
-        });
+        // 기존 토스트 닫기
+        toast.dismiss();
+        // 안내 메시지 표시 (React 컴포넌트로 렌더링)
+        toast.custom(() => <showTroubleshootingGuide />, { duration: 10000 });
       }
       
       // 상태 초기화
@@ -866,6 +855,7 @@ const ChatInterface = () => {
 
     if (!canvas || !video) {
       toast.error("카메라를 찾을 수 없습니다");
+      setIsCapturing(false);
       return;
     }
 
@@ -900,7 +890,7 @@ const ChatInterface = () => {
         sender: "user",
         text: "사진을 보냈습니다",
         time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
-        image: imageUrl,
+        image: `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`, // 拼接完整URL
         messageType: "chat"
       };
 
@@ -948,6 +938,8 @@ const ChatInterface = () => {
     } catch (error) {
       console.error("사진 촬영 중 오류 발생:", error);
       toast.error(`사진 촬영에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    } finally {
+      setIsCapturing(false);
     }
   };
 
@@ -992,7 +984,7 @@ const ChatInterface = () => {
           sender: "user",
           text: inputMessage,
           time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
-          image: URL.createObjectURL(capturedImageBlob),
+          image: `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`, // 拼接完整URL
           messageType: "chat"
         };
         setMessages(prev => [...prev, userMessage]);
@@ -1164,6 +1156,55 @@ const ChatInterface = () => {
     }
   }, [inputMessage, isSearchMode, searchStream, searchEffort, chatState]);
 
+  // 新增：上传已有照片
+  const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file, file.name);
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/chat/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('이미지 업로드 실패');
+      }
+
+      const data = await response.json();
+
+      // 用户消息
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        sender: "user",
+        text: "사진을 보냈습니다",
+        time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+        image: `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`, // 拼接完整URL
+        messageType: "chat"
+      };
+      setMessages(prev => [...prev, userMessage]);
+
+      // AI 回复
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        sender: "ai",
+        text: data.response || "사진을 잘 받았어요!",
+        time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+        messageType: "chat"
+      };
+      setMessages(prev => [...prev, aiMessage]);
+
+      toast.success("사진이 업로드되었습니다");
+      setShowCameraPreview(false);
+    } catch (error) {
+      console.error("이미지 업로드 오류:", error);
+      toast.error("이미지 업로드에 실패했습니다");
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Search Activity Panel */}
@@ -1212,6 +1253,15 @@ const ChatInterface = () => {
               >
                 사진 촬영
               </button>
+              <label className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg cursor-pointer">
+                사진 업로드
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={handleUploadPhoto}
+                />
+              </label>
             </div>
           </div>
         </div>
@@ -1308,8 +1358,8 @@ const ChatInterface = () => {
                   <div className="mb-2">
                     <img 
                       src={message.image} 
-                      alt="Captured" 
-                      className="rounded-lg max-w-full" 
+                      alt="사진" 
+                      style={{ maxWidth: 200, borderRadius: 8 }} 
                     />
                   </div>
                 )}

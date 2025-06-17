@@ -144,6 +144,12 @@ if websocket_router:
 if api_router:
     app.include_router(api_router)
 
+# 确保 static/uploads 目录存在
+os.makedirs("static/uploads", exist_ok=True)
+
+# 挂载 /static 路径
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 @app.get("/")
 async def root():
     return {

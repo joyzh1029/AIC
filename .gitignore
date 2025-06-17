@@ -65,3 +65,6 @@ node_modules/
 
 # ffmpeg
 ffmpeg/
+
+# 忽略图片上传目录
+backend/static/uploads/

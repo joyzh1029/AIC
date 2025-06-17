@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -100,3 +100,21 @@ async def chat_endpoint(request: ChatRequest):
             status_code=500,
             content={"success": False, "error": str(e)}
         )
+
+@router.post("/upload")
+async def upload_image(image: UploadFile = File(...)):
+    try:
+        content = await image.read()
+        # 确保保存目录存在
+        save_dir = os.path.join("static", "uploads")
+        os.makedirs(save_dir, exist_ok=True)
+        # 生成唯一文件名
+        filename = f"img_{int(time.time())}_{image.filename}"
+        save_path = os.path.join(save_dir, filename)
+        with open(save_path, "wb") as f:
+            f.write(content)
+        # 返回图片的相对路径
+        return JSONResponse(content={"success": True, "message": "이미지 업로드 성공", "image_url": f"/static/uploads/{filename}"})
+    except Exception as e:
+        logging.error(f"Image upload error: {str(e)}")
+        return JSONResponse(status_code=500, content={"success": False, "message": "이미지 업로드 실패", "error": str(e)})
