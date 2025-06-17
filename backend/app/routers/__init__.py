@@ -12,11 +12,6 @@ api_router = APIRouter()
 from app.routers.chat import router as chat_router
 api_router.include_router(chat_router)
 
-# camera_router
-from app.routers.camera import router as camera_router
-api_router.include_router(camera_router)
-
-
 from app.routers.emotion import router as emotion_router
 api_router.include_router(emotion_router)
 

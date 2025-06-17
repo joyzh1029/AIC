@@ -4,7 +4,7 @@ MBTI 관련 API 라우터
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict
 from app.core.mbti_data import MBTI_PERSONAS, MBTI_COMPATIBILITY
 
 router = APIRouter(prefix="/api/mbti", tags=["mbti"])
@@ -19,6 +19,10 @@ class MBTIPersonaResponse(BaseModel):
     ai_persona: str
     initial_message: str
     ai_name: str
+
+class MBTITypesResponse(BaseModel):
+    mbti_types: List[str]
+    relationship_types: List[Dict[str, str]]
 
 @router.post("/persona", response_model=MBTIPersonaResponse)
 async def get_mbti_persona(request: MBTIPersonaRequest):
@@ -102,4 +106,17 @@ def generate_initial_message(user_mbti: str, ai_mbti: str, relationship_type: st
     return greeting_patterns.get(
         ai_mbti, 
         f"안녕하세요, {ai_name}입니다. 당신의 MBTI가 {user_mbti}이고, 우리는 {relationship_type}로 설정되었네요. 만나서 반갑습니다! 어떤 이야기를 나눠볼까요?"
+    )
+
+@router.get("/types", response_model=MBTITypesResponse)
+async def get_mbti_types():
+    """
+    지원되는 모든 MBTI 유형과 관계 유형을 반환합니다.
+    """
+    return MBTITypesResponse(
+        mbti_types=list(MBTI_COMPATIBILITY.keys()),
+        relationship_types=[
+            {"value": "동질적 관계", "label": "동질적 관계 (비슷한 성격)"},
+            {"value": "보완적 관계", "label": "보완적 관계 (서로 다른 매력)"}
+        ]
     )
