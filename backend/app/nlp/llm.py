@@ -2,6 +2,8 @@ from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 import google.generativeai as genai
 import os
+import logging
+from app.nlp.response_formatter import format_llm_response
 
 def configure_gemini():
     # 환경변수에서 Google API 키 가져오기
@@ -48,13 +50,26 @@ def generate_response(
             "마무리로 가벼운 질문 하나도 곁들이면 좋아."
         )
 
-    llm = ChatGoogleGenerativeAI(
-        model=model_name,
-        temperature=0.7,
-        api_key=os.getenv("GEMINI_API_KEY"),
-    )
-    response = llm.invoke(prompt)
-    return response.content
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=0.7,
+            api_key=os.getenv("GEMINI_API_KEY"),
+        )
+        response = llm.invoke(prompt)
+        
+        # 디버그 로깅 추가
+        logging.debug(f"Raw response type: {type(response)}")
+        logging.debug(f"Raw response: {response}")
+        
+        # response 객체 자체를 포맷팅
+        formatted_response = format_llm_response(response)
+        logging.debug(f"Formatted response: {formatted_response}")
+        
+        return formatted_response
+    except Exception as e:
+        logging.error(f"Error in generate_response: {str(e)}")
+        return "죄송합니다. 응답을 생성하는 중에 오류가 발생했습니다."
 
 
 def generate_search_summary(user_text: str, raw_results: list[str]) -> str:
@@ -70,10 +85,29 @@ def generate_search_summary(user_text: str, raw_results: list[str]) -> str:
         "카테고리(예: 유선 키보드, 무선 키보드 등) 별로 정리하면 더 좋아."
     )
 
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
+            temperature=0.7,
+            api_key=os.getenv("GEMINI_API_KEY"),
+        )
+        response = llm.invoke(prompt)
+        return format_llm_response(response)
+    except Exception as e:
+        logging.error(f"Error in generate_search_summary: {str(e)}")
+        return "죄송합니다. 검색 결과를 요약하는 중에 오류가 발생했습니다."
+
+def test_llm_simple():
     llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
+        model="gemini-2.0-flash",
         temperature=0.7,
         api_key=os.getenv("GEMINI_API_KEY"),
     )
-    response = llm.invoke(prompt)
-    return response.content
+    try:
+        prompt = "안녕! 자기소개 해줘."
+        response = llm.invoke(prompt)
+        print("Simple prompt response:", response)
+    except Exception as e:
+        import traceback
+        print("Simple prompt error:", e)
+        traceback.print_exc()
