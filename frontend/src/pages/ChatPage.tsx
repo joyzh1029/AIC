@@ -884,13 +884,13 @@ const ChatInterface = () => {
       // 이미지 URL 생성
       const imageUrl = URL.createObjectURL(imageBlob);
       
-      // 사용자 메시지 생성
+      // 사용자 메시지 생성 (先创建临时URL用于预览)
       const userMessage: Message = {
         id: Date.now().toString(),
         sender: "user",
         text: "사진을 보냈습니다",
         time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
-        image: `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`, // 拼接完整URL
+        image: imageUrl, // 使用本地生成的临时URL
         messageType: "chat"
       };
 
