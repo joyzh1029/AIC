@@ -76,13 +76,19 @@ async def chat_endpoint(request: ChatRequest):
         logging.info(f"Synthesized emotion for LLM: {emotion}")
 
 
+        # VLM 분석 결과가 있는지 확인
+        vlm_analysis = context.get("vlm_analysis")
+        if vlm_analysis:
+            logging.info(f"Using VLM analysis in response generation: {vlm_analysis[:100]}...")
+
         # 응답 생성
         response_text = generate_response(
-            face_emotion,
-            voice_emotion,
-            context.get("location_scene", "실내, 책상 앞"),
-            user_text,
-            context
+            face_emotion=face_emotion,
+            voice_emotion=voice_emotion,
+            scene=context.get("location_scene", "실내, 책상 앞"),
+            user_text=user_text,
+            context=context,
+            vlm_analysis=vlm_analysis
         )
         logging.info(f"LLM generated response: {response_text}")
 
@@ -151,12 +157,45 @@ async def upload_image(image: UploadFile = File(...)):
             logger.info(f"Image analysis completed in {analysis_time:.2f} seconds")
             logger.info(f"Analysis result: {analysis[:100]}..." if len(analysis) > 100 else f"Analysis result: {analysis}")
             
-            response = {
-                "success": True, 
-                "message": "이미지 업로드 및 분석 성공", 
-                "image_url": f"/static/uploads/{filename}",
-                "analysis": analysis
-            }
+            # Generate a response that includes the VLM analysis
+            try:
+                from app.nlp.llm import generate_response
+                
+                # Create a context that includes the VLM analysis
+                vlm_context = {
+                    "weather": "맑음",
+                    "sleep": "7시간",
+                    "stress": "중간",
+                    "location_scene": "이미지 분석 결과 참조",
+                    "emotion_history": ["neutral", "neutral", "neutral"],
+                    "vlm_analysis": analysis  # Add VLM analysis to context
+                }
+                
+                # Generate a response that includes the VLM analysis
+                ai_response = generate_response(
+                    face_emotion="neutral",
+                    voice_emotion="neutral",
+                    scene=f"이미지 분석 결과: {analysis}",
+                    user_text="이 사진을 분석해줘",
+                    context=vlm_context,
+                    vlm_analysis=analysis
+                )
+                
+                response = {
+                    "success": True, 
+                    "message": "이미지 업로드 및 분석 성공", 
+                    "image_url": f"/static/uploads/{filename}",
+                    "analysis": analysis,
+                    "ai_response": ai_response
+                }
+            except Exception as e:
+                logger.error(f"Error generating AI response with VLM analysis: {str(e)}")
+                response = {
+                    "success": True, 
+                    "message": "이미지 업로드 성공 (응답 생성 실패)", 
+                    "image_url": f"/static/uploads/{filename}",
+                    "analysis": analysis
+                }
             logger.info("Returning successful response with analysis")
             return JSONResponse(content=response)
             

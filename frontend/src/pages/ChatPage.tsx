@@ -913,15 +913,6 @@ const ChatInterface = () => {
         
         const data = await response.json();
         
-        // AI 응답 메시지 추가
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          sender: "ai",
-          text: data.analysis || data.message || "사진을 잘 받았어요!",
-          time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
-          messageType: "chat"
-        };
-        
         // 이미지 URL이 있는 경우 업데이트
         if (data.image_url) {
           userMessage.image = `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`;
@@ -936,7 +927,32 @@ const ChatInterface = () => {
           });
         }
         
+        // 백엔드에서 생성된 AI 응답이 있으면 사용하고, 없으면 기본 메시지 표시
+        const aiMessageText = data.ai_response || data.analysis || data.message || "사진을 잘 받았어요!";
+        
+        // AI 응답 메시지 추가
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          sender: "ai",
+          text: aiMessageText,
+          time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+          messageType: "chat"
+        };
+        
+        // 디버깅을 위한 로그 추가
+        console.log('AI Response from server:', data);
+        console.log('AI Message to display:', aiMessage);
+        
+        // 메시지 목록에 AI 응답 추가
         setMessages(prev => [...prev, aiMessage]);
+        
+        // 메시지 컨테이너로 스크롤
+        setTimeout(() => {
+          const container = document.querySelector('.messages-container');
+          if (container) {
+            container.scrollTop = container.scrollHeight;
+          }
+        }, 100);
       } catch (uploadError) {
         console.error("이미지 업로드 오류:", uploadError);
         toast.error("이미지 전송에 실패했습니다");
