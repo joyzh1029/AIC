@@ -87,7 +87,7 @@ async def generate_tts(
         raise HTTPException(status_code=400, detail="텍스트를 입력해주세요.")
 
     payload = {
-        "model": "speech-01",
+        "model": "speech-02-hd",
         "text": text,
         "voice_id": voice_id,
         "speed": speed,

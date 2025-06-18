@@ -1019,16 +1019,16 @@ const ChatInterface = () => {
           const userMessage: Message = {
             id: Date.now().toString(),
             sender: "user",
-            text: inputMessage,
+            text: data.text,
             time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
-            image: `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`,
+            voice: URL.createObjectURL(audioBlob),
             messageType: "chat"
           };
           setMessages(prev => [...prev, userMessage]);
 
           // 添加AI响应
           const aiMessage: Message = {
-            id: Date.now().toString(),
+            id: (Date.now() + 2).toString(),
             sender: "ai",
             text: data.response,
             time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
@@ -1079,6 +1079,16 @@ const ChatInterface = () => {
           messageType: "chat"
         };
         setMessages(prev => [...prev, userMessage]);
+
+        // 添加AI的回复消息
+        const aiMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          sender: "ai",
+          text: data.response,
+          time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+          messageType: "chat"
+        };
+        setMessages(prev => [...prev, aiMessage]);
         
         // 如果是搜索查询，触发搜索
         if (data.is_search_query) {
