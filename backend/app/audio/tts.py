@@ -1,99 +1,124 @@
-from fastapi import Form, HTTPException
-from fastapi.responses import FileResponse
-import json
-from typing import Iterator
-import requests
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
+import io
 import os
-import tempfile
-import glob
-from dotenv import load_dotenv
 import httpx
 from pydantic import BaseModel
 
-# .env에서 환경변수 불러오기
-load_dotenv()
-MINIMAX_GROUP_ID = os.getenv("MINIMAX_GROUP_ID")
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
-MINIMAX_TTS_URL = f"https://api.minimax.chat/v1/t2a_v2?GroupId={MINIMAX_GROUP_ID}"
 
+router = APIRouter(
+    prefix="/api/tts",
+    tags=["tts"]
+)
+
+# POST 요청용 데이터 모델
 class TTSRequest(BaseModel):
     text: str
-    speaker: str = "ko"
+    voice_id: str = "female-tianmei-jingpin"
+    speed: float = 1.0
+    vol: float = 1.0
+    audio_sample_rate: int = 24000
+    bitrate: int = 128000
+    format: str = "mp3"
 
-def build_tts_stream_headers() -> dict:
-    """Minimax TTS API 호출을 위한 헤더 생성 함수"""
-    return {
-        'accept': 'application/json, text/plain, */*',
-        'content-type': 'application/json',
-        'authorization': "Bearer " + MINIMAX_API_KEY,
+@router.post("")
+async def tts_post(request: TTSRequest):
+    if not MINIMAX_API_KEY:
+        raise HTTPException(status_code=500, detail="MINIMAX_API_KEY가 설정되지 않았습니다.")
+
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="텍스트를 입력해주세요.")
+
+    payload = {
+        "model": "speech-01",
+        "text": request.text,
+        "voice_id": request.voice_id,
+        "speed": request.speed,
+        "vol": request.vol,
+        "audio_sample_rate": request.audio_sample_rate,
+        "bitrate": request.bitrate,
+        "format": request.format
     }
 
-def build_tts_stream_body(text: str) -> str:
-    """TTS 변환 요청에 사용할 payload(body) 생성 함수"""
-    body = json.dumps({
-        "model": "speech-02-turbo",            # 사용할 TTS 모델
-        "text": text,                          # 변환할 텍스트(프론트에서 입력)
-        "stream": True,                        # 스트리밍 모드 사용 (응답속도 빠름)
-        "voice_setting": {                     # 목소리/감정/속도 등 설정
-            "voice_id": "Lovely_Girl",         # 목소리의 id.
-            "speed": 1.4,
-            "vol": 1.0,
-            "pitch": 0,
-        },
-        "audio_setting": {                     # 오디오 파일 출력 옵션
-            "sample_rate": 32000,
-            "bitrate": 128000,
-            "format": "mp3",
-            "channel": 1
-        },
-        "language_boost": "Korean"             # 한국어 발음 우선
-    })
-    return body
+    headers = {
+        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+        "Content-Type": "application/json",
+    }
 
-def call_tts_stream(text: str) -> Iterator[bytes]:
-    """Minimax TTS API에 요청, 오디오 청크(HEX 인코딩) yield하는 제너레이터"""
-    tts_headers = build_tts_stream_headers()
-    tts_body = build_tts_stream_body(text)
-    response = requests.request("POST", MINIMAX_TTS_URL, stream=True, headers=tts_headers, data=tts_body)
-    for chunk in response.raw:
-        # API 스트리밍 형식에 맞게 'data:'로 시작하는 청크만 처리
-        if chunk and chunk[:5] == b'data:':
-            data = json.loads(chunk[5:])
-            if "data" in data and "extra_info" not in data:
-                if "audio" in data["data"]:
-                    yield data["data"]['audio']  # 오디오 청크(HEX)
-
-def cleanup_old_files(directory=".", pattern="output_*.mp3", max_files=50):
-    """mp3 파일이 max_files(50)개 초과 시, 오래된 파일부터 삭제"""
-    files = sorted(
-        glob.glob(os.path.join(directory, pattern)),
-        key=os.path.getmtime   # 수정시간 기준 정렬
-    )
-    # max_files 초과 파일은 삭제
-    if len(files) > max_files:
-        for file in files[:len(files)-max_files]:
-            try:
-                os.remove(file)
-            except Exception as e:
-                print(f"파일 삭제 실패: {file} ({e})")
-
-async def text_to_speech(text: str = Form(...)):
-    """
-    프론트엔드에서 전송한 텍스트를 TTS로 변환해 mp3 파일로 반환
-    """
     try:
-        # 임시 파일로 mp3 저장
-        with tempfile.NamedTemporaryFile(delete=False, prefix="output_", suffix=".mp3") as temp_file:
-            temp_file_path = temp_file.name
-            audio = b""
-            for chunk in call_tts_stream(text):
-                if chunk and chunk != '\n':
-                    decoded_hex = bytes.fromhex(chunk)
-                    audio += decoded_hex
-            temp_file.write(audio)
-        # mp3 파일이 50개 초과 시 오래된 파일 자동 삭제
-        cleanup_old_files(directory=".", pattern="output_*.mp3", max_files=50)
-        # mp3 파일 반환
-        return FileResponse(temp_file_path, media_type="audio/mp3", filename=os.path.basename(temp_file_path))
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post("https://api.minimax.chat/v1/text_to_speech", json=payload, headers=headers)
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Minimax 오류: {response.text}"
+                )
+
+            return StreamingResponse(
+                io.BytesIO(response.content),
+                media_type="audio/mpeg",
+                headers={
+                    "Content-Disposition": "inline; filename=speech.mp3",
+                    "Cache-Control": "no-cache"
+                }
+            )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"TTS 변환 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"TTS 처리 실패: {str(e)}")
+
+@router.get("/generate")
+async def generate_tts(
+    text: str = Query(..., description="TTS로 변환할 텍스트입니다."),
+    voice_id: str = "female-tianmei-jingpin",
+    speed: float = 1.0,
+    vol: float = 1.0,
+    audio_sample_rate: int = 24000,
+    bitrate: int = 128000,
+    format: str = "mp3"
+):
+    """
+    Minimax TTS API를 사용하여 입력 텍스트를 음성(mp3)으로 변환합니다.
+    """
+    if not MINIMAX_API_KEY:
+        raise HTTPException(status_code=500, detail="MINIMAX_API_KEY가 설정되지 않았습니다.")
+
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="텍스트를 입력해주세요.")
+
+    payload = {
+        "model": "speech-01",
+        "text": text,
+        "voice_id": voice_id,
+        "speed": speed,
+        "vol": vol,
+        "audio_sample_rate": audio_sample_rate,
+        "bitrate": bitrate,
+        "format": format
+    }
+
+    headers = {
+        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post("https://api.minimax.chat/v1/text_to_speech", json=payload, headers=headers)
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Minimax 오류: {response.text}"
+                )
+
+            return StreamingResponse(
+                io.BytesIO(response.content),
+                media_type="audio/mpeg",
+                headers={
+                    "Content-Disposition": "inline; filename=speech.mp3",
+                    "Cache-Control": "no-cache"
+                }
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS 처리 실패: {str(e)}")

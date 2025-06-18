@@ -494,6 +494,20 @@ const TodoistPanel = ({
   );
 };
 
+// 添加故障排除指南组件
+const TroubleshootingGuide: React.FC = () => (
+  <div style={{ padding: '1rem', maxWidth: '400px' }}>
+    <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 'bold' }}>카메라 문제 해결 방법</h3>
+    <ol style={{ margin: '0.5rem 0 0 1rem', paddingLeft: '1rem' }}>
+      <li style={{ marginBottom: '0.5rem' }}>다른 애플리케이션에서 카메라를 사용 중인지 확인하고 모두 종료하세요.</li>
+      <li style={{ marginBottom: '0.5rem' }}>웹 브라우저를 완전히 종료했다가 다시 실행해보세요.</li>
+      <li style={{ marginBottom: '0.5rem' }}>컴퓨터를 재시작해보세요.</li>
+      <li style={{ marginBottom: '0.5rem' }}>브라우저 설정에서 카메라 권한을 확인하고 다시 시도해보세요.</li>
+      <li>다른 카메라를 연결해보세요 (노트북의 경우 외장 카메라).</li>
+    </ol>
+  </div>
+);
+
 // Main Chat Interface Component
 const ChatInterface = () => {
   const navigate = useNavigate();
@@ -504,6 +518,7 @@ const ChatInterface = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   
   // 통합된 상태 관리
   const [chatState, setChatState] = useState<ChatState>({
@@ -523,6 +538,9 @@ const ChatInterface = () => {
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
   const [searchEffort, setSearchEffort] = useState<"low" | "medium" | "high">("medium");
   const [capturedImageBlob, setCapturedImageBlob] = useState<Blob | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Custom search stream hook
   const searchStream = useSearchStream({
@@ -672,7 +690,7 @@ const ChatInterface = () => {
       if (!recorder) return resolve(new Blob());
 
       recorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         resolve(audioBlob);
       };
 
@@ -824,23 +842,10 @@ const ChatInterface = () => {
       
       // 복구 안내 버튼 추가
       if (showRecovery) {
-        const showTroubleshootingGuide = () => (
-          <div style={{ padding: '1rem', maxWidth: '400px' }}>
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 'bold' }}>카메라 문제 해결 방법</h3>
-            <ol style={{ margin: '0.5rem 0 0 1rem', paddingLeft: '1rem' }}>
-              <li style={{ marginBottom: '0.5rem' }}>다른 애플리케이션에서 카메라를 사용 중인지 확인하고 모두 종료하세요.</li>
-              <li style={{ marginBottom: '0.5rem' }}>웹 브라우저를 완전히 종료했다가 다시 실행해보세요.</li>
-              <li style={{ marginBottom: '0.5rem' }}>컴퓨터를 재시작해보세요.</li>
-              <li style={{ marginBottom: '0.5rem' }}>브라우저 설정에서 카메라 권한을 확인하고 다시 시도해보세요.</li>
-              <li>다른 카메라를 연결해보세요 (노트북의 경우 외장 카메라).</li>
-            </ol>
-          </div>
-        );
-
         // 기존 토스트 닫기
         toast.dismiss();
         // 안내 메시지 표시 (React 컴포넌트로 렌더링)
-        toast.custom(() => <showTroubleshootingGuide />, { duration: 10000 });
+        toast.custom(() => <TroubleshootingGuide />, { duration: 10000 });
       }
       
       // 상태 초기화
@@ -991,54 +996,98 @@ const ChatInterface = () => {
     setIsCapturing(false);
 
     const audioBlob = await stopRecording();
-    if (!capturedImageBlob) return;
+    
+    // 如果有图片和音频，则进行多模态分析
+    if (capturedImageBlob) {
+      const formData = new FormData();
+      formData.append("image", capturedImageBlob, "image.png");
+      formData.append("audio", audioBlob, "audio.webm");
+      formData.append("text", inputMessage);
 
-    // 감정 분석 요청
-    const formData = new FormData();
-    formData.append("image", capturedImageBlob, "image.png");
-    formData.append("audio", audioBlob, "audio.webm");
-    formData.append("text", inputMessage);
+      try {
+        const res = await fetch("http://localhost:8181/api/conversation/respond", {
+          method: "POST",
+          body: formData,
+        });
 
+        const data = await res.json();
+
+        if (data.success) {
+          // 添加用户消息
+          const userMessage: Message = {
+            id: Date.now().toString(),
+            sender: "user",
+            text: inputMessage,
+            time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+            image: `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`,
+            messageType: "chat"
+          };
+          setMessages(prev => [...prev, userMessage]);
+
+          // 添加AI响应
+          const aiMessage: Message = {
+            id: Date.now().toString(),
+            sender: "ai",
+            text: data.response,
+            time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+            messageType: "chat"
+          };
+          setMessages(prev => [...prev, aiMessage]);
+
+          setInputMessage("");
+        } else if (data.mode === "search_detected") {
+          toast.info("검색 질문으로 인식되었어요. 정보를 찾아볼게요...");
+          await sendSearchQuery(data.text);
+        } else {
+          toast.error("감정 분석 실패: " + (data.error || "알 수 없는 오류"));
+        }
+      } catch (err) {
+        console.error("감정 분석 API 오류:", err);
+        toast.error("서버 통신 실패");
+      }
+    } else {
+      // 只有音频，进行语音转文字
+      await handleVoiceTranscription(audioBlob);
+    }
+  };
+
+  // 语音转文字处理函数
+  const handleVoiceTranscription = async (audioBlob: Blob) => {
     try {
-      const res = await fetch("http://localhost:8181/api/conversation/respond", {
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "audio.webm");
+
+      const response = await fetch("http://localhost:8181/api/audio/transcribe", {
         method: "POST",
         body: formData,
       });
 
-      const data = await res.json();
-
+      const data = await response.json();
       if (data.success) {
-        // 사용자 메시지 추가
+        // 创建语音文件的URL
+        const voiceUrl = URL.createObjectURL(audioBlob);
+        
+        // 添加用户的语音消息
         const userMessage: Message = {
           id: Date.now().toString(),
           sender: "user",
-          text: inputMessage,
+          text: data.text,
           time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
-          image: `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`, // 拼接完整URL
+          voice: voiceUrl,
           messageType: "chat"
         };
         setMessages(prev => [...prev, userMessage]);
-
-        // AI 응답 추가
-        const aiMessage: Message = {
-          id: Date.now().toString(),
-          sender: "ai",
-          text: data.response,
-          time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
-          messageType: "chat"
-        };
-        setMessages(prev => [...prev, aiMessage]);
-
-        setInputMessage("");
-      } else if (data.mode === "search_detected") {
-        toast.info("🔎 검색 질문으로 인식되었어요. 정보를 찾아볼게요...");
-        await sendSearchQuery(data.text);
+        
+        // 如果是搜索查询，触发搜索
+        if (data.is_search_query) {
+          await sendSearchQuery(data.text);
+        }
       } else {
-        toast.error("감정 분석 실패: " + (data.error || "알 수 없는 오류"));
+        toast.error("语音转写失败");
       }
     } catch (err) {
-      console.error("감정 분석 API 오류:", err);
-      toast.error("서버 통신 실패");
+      console.error("语音转写错误:", err);
+      toast.error("语音转写过程中出现错误");
     }
   };
 
@@ -1244,8 +1293,62 @@ const ChatInterface = () => {
     }
   };
 
+  // 处理录音按钮点击
+  const handleMicClick = async () => {
+    try {
+      if (!isRecording) {
+        await startRecording();
+        setIsRecording(true);
+      } else {
+        const audioBlob = await stopRecording();
+        setIsRecording(false);
+        await handleVoiceTranscription(audioBlob);
+      }
+    } catch (err) {
+      console.error('录音错误:', err);
+      toast.error('录音过程中出现错误');
+      setIsRecording(false);
+    }
+  };
+
+  // 更新录音时间
+  useEffect(() => {
+    if (isRecording) {
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      setRecordingTime(0);
+    }
+
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    };
+  }, [isRecording]);
+
+  // 播放语音消息
+  const playVoiceMessage = (voiceUrl: string) => {
+    if (audioRef.current) {
+      audioRef.current.src = voiceUrl;
+      audioRef.current.play().catch(err => {
+        console.error('播放语音失败:', err);
+        toast.error('播放语音失败');
+      });
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
+      {/* Hidden audio element for voice playback */}
+      <audio ref={audioRef} />
+
       {/* Search Activity Panel */}
       {isSearchMode && processedEventsTimeline.length > 0 && (
         <div className="fixed top-16 right-4 w-80 bg-white shadow-lg rounded-lg p-4 z-40 max-h-64 overflow-y-auto">
@@ -1381,6 +1484,17 @@ const ChatInterface = () => {
                     ? "bg-green-100 text-gray-800"
                     : "bg-gray-100 text-gray-800"
               } rounded-2xl px-4 py-2 ${message.sender === "user" ? "rounded-tr-sm" : "rounded-tl-sm"}`}>
+                {message.voice && (
+                  <div className="mb-2">
+                    <button
+                      onClick={() => playVoiceMessage(message.voice!)}
+                      className="flex items-center space-x-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                    >
+                      <Volume2 className="h-4 w-4" />
+                      <span className="text-xs">음성 재생</span>
+                    </button>
+                  </div>
+                )}
                 {message.messageType === "todoist" && message.sender === "user" && (
                   <div className="flex items-center mb-1">
                     <CheckSquare className="h-3 w-3 mr-1" />
@@ -1430,12 +1544,19 @@ const ChatInterface = () => {
           )}
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center bg-white border rounded-full">
+              {isRecording && (
+                <div className="flex items-center px-4 text-red-500 text-sm">
+                  <span className="animate-pulse mr-2">●</span>
+                  录音中 {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
+                </div>
+              )}
               <input
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder={isSearchMode ? "검색할 내용을 입력하세요..." : "메시지를 입력하세요..."}
+                placeholder={isRecording ? "录音完成后将自动转换为文字..." : (isSearchMode ? "검색할 내용을 입력하세요..." : "메시지를 입력하세요...")}
                 className="flex-1 px-4 py-2 bg-transparent focus:outline-none text-sm"
+                disabled={isRecording}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -1451,14 +1572,20 @@ const ChatInterface = () => {
                 }`}
                 onClick={() => setIsSearchMode(!isSearchMode)}
                 title="검색 모드 전환"
+                disabled={isRecording}
               >
                 <Search className="h-5 w-5" />
               </button>
               <button 
-                className="p-2 hover:bg-gray-100 rounded-full mr-1"
-                title="음성 메시지"
+                className={`p-2 hover:bg-gray-100 rounded-full mr-1 ${
+                  isRecording 
+                    ? 'bg-red-100 text-red-500 animate-pulse' 
+                    : ''
+                }`}
+                onClick={handleMicClick}
+                title={isRecording ? "停止录音" : "开始录音"}
               >
-                <Mic className="h-5 w-5 text-gray-500" />
+                <Mic className="h-5 w-5" />
               </button>
               <button 
                 className="p-2 hover:bg-gray-100 rounded-full mr-1"
@@ -1469,7 +1596,7 @@ const ChatInterface = () => {
                     toast.error('카메라를 시작하는 중 오류가 발생했습니다.');
                   });
                 }}
-                disabled={isCapturing}
+                disabled={isCapturing || isRecording}
                 title="사진 전송"
               >
                 <Camera className="h-5 w-5 text-gray-500" />

@@ -41,6 +41,7 @@ logger.info(f"Added {BACKEND_DIR} to Python path")
 # 코어 모듈 임포트
 try:
     from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
+    from app.routers import api_router
     logger.info("Core startup modules imported successfully")
 except ImportError as e:
     logger.warning(f"Core startup modules not found or incomplete: {str(e)}")
