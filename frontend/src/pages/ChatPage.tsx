@@ -519,6 +519,8 @@ const ChatInterface = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const ttsAudioRef = useRef<HTMLAudioElement>(null);
+  const [isTTSPlaying, setIsTTSPlaying] = useState(false);
   
   // 통합된 상태 관리
   const [chatState, setChatState] = useState<ChatState>({
@@ -1121,24 +1123,57 @@ const ChatInterface = () => {
   };
 
   // TTS 재생
-  const playTTS = useCallback(async (text: string) => {
+  const playTTS = async (text: string) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
+      if (!text.trim()) return;
+
+      // 如果正在播放，先停止
+      if (isTTSPlaying && ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current.currentTime = 0;
+        setIsTTSPlaying(false);
+        return;
+      }
+
+      // 构建URL参数
+      const params = new URLSearchParams({
+        text: text,
+        voice_id: "female-tianmei-jingpin",
+        speed: "1.0",
+        vol: "1.0"
       });
-      
-      if (!response.ok) throw new Error('TTS 변환 실패');
-      
+
+      // 获取音频流
+      const response = await fetch(`http://localhost:8181/api/tts/generate?${params}`);
+      if (!response.ok) {
+        throw new Error('TTS请求失败');
+      }
+
+      // 创建音频Blob
       const audioBlob = await response.blob();
-      const audio = new Audio(URL.createObjectURL(audioBlob));
-      audio.onended = () => URL.revokeObjectURL(audio.src);
-      await audio.play();
-    } catch (error) {
-      console.error('음성 재생 실패:', error);
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // 播放音频
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.src = audioUrl;
+        ttsAudioRef.current.onplay = () => setIsTTSPlaying(true);
+        ttsAudioRef.current.onended = () => {
+          setIsTTSPlaying(false);
+          URL.revokeObjectURL(audioUrl);
+        };
+        ttsAudioRef.current.onerror = () => {
+          setIsTTSPlaying(false);
+          URL.revokeObjectURL(audioUrl);
+          toast.error('播放TTS音频失败');
+        };
+        await ttsAudioRef.current.play();
+      }
+    } catch (err) {
+      console.error('TTS错误:', err);
+      toast.error('TTS转换失败');
+      setIsTTSPlaying(false);
     }
-  }, []);
+  };
 
   // 메시지 전송
   const handleSendMessage = useCallback(async (messageText?: string, messageType: "chat" | "search" | "schedule" | "todoist" = "chat") => {
@@ -1346,8 +1381,9 @@ const ChatInterface = () => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Hidden audio element for voice playback */}
+      {/* Hidden audio elements */}
       <audio ref={audioRef} />
+      <audio ref={ttsAudioRef} />
 
       {/* Search Activity Panel */}
       {isSearchMode && processedEventsTimeline.length > 0 && (
@@ -1521,11 +1557,11 @@ const ChatInterface = () => {
                   {message.time}
                   {message.sender === "ai" && (
                     <button 
-                      className="ml-2 p-1 hover:bg-gray-300 rounded-full"
+                      className={`ml-2 p-1 hover:bg-gray-300 rounded-full ${isTTSPlaying ? 'bg-blue-100' : ''}`}
                       onClick={() => playTTS(message.text)}
-                      aria-label="음성 듣기"
+                      aria-label={isTTSPlaying ? "停止播放" : "播放语音"}
                     >
-                      <Volume2 className="h-4 w-4 text-gray-500" />
+                      <Volume2 className={`h-4 w-4 ${isTTSPlaying ? 'text-blue-500' : 'text-gray-500'}`} />
                     </button>
                   )}
                 </div>

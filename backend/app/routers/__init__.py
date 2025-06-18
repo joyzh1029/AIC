@@ -20,6 +20,7 @@ from app.routers.mbti import router as mbti_router
 from app.routers.user import router as user_router
 from app.routers.avatar import router as avatar_router
 from app.routers.audio import router as audio_router
+from app.audio.tts import router as tts_router
 #from app.routers.search import router as search_router 
 
 api_router.include_router(emotion_router)
@@ -28,6 +29,7 @@ api_router.include_router(mbti_router)
 api_router.include_router(user_router)
 api_router.include_router(avatar_router)
 api_router.include_router(audio_router)
+api_router.include_router(tts_router)
 #api_router.include_router(search_router)
 
 # main.py에서 한 번에 등록할 수 있도록 모든 라우터 내보내기

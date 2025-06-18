@@ -15,7 +15,7 @@ router = APIRouter(
 # POST 요청용 데이터 모델
 class TTSRequest(BaseModel):
     text: str
-    voice_id: str = "female-tianmei-jingpin"
+    voice_id: str = "Korean_WiseElf"
     speed: float = 1.0
     vol: float = 1.0
     audio_sample_rate: int = 24000
@@ -31,7 +31,7 @@ async def tts_post(request: TTSRequest):
         raise HTTPException(status_code=400, detail="텍스트를 입력해주세요.")
 
     payload = {
-        "model": "speech-01",
+        "model": "speech-02-hd",
         "text": request.text,
         "voice_id": request.voice_id,
         "speed": request.speed,
