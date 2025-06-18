@@ -1206,26 +1206,35 @@ const ChatInterface = () => {
 
       const data = await response.json();
 
-      // 用户消息
+      // 사용자 메시지 추가
       const userMessage: Message = {
         id: Date.now().toString(),
         sender: "user",
         text: "사진을 보냈습니다",
         time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
-        image: `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`, // 拼接完整URL
+        image: `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`,
         messageType: "chat"
       };
+      
+      // 메시지 목록에 사용자 메시지 추가
       setMessages(prev => [...prev, userMessage]);
 
-      // AI 回复
+      // AI 응답 메시지 추가 (백엔드에서 반환한 ai_response 또는 analysis 사용)
+      const aiResponse = data.ai_response || data.analysis || "사진을 잘 받았어요!";
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         sender: "ai",
-        text: data.response || "사진을 잘 받았어요!",
+        text: aiResponse,
         time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
         messageType: "chat"
       };
+      
+      // 메시지 목록에 AI 응답 추가
       setMessages(prev => [...prev, aiMessage]);
+      
+      // 디버깅을 위한 로그
+      console.log("Backend response data:", data);
+      console.log("AI Response:", aiResponse);
 
       toast.success("사진이 업로드되었습니다");
       setShowCameraPreview(false);
