@@ -103,18 +103,84 @@ async def chat_endpoint(request: ChatRequest):
 
 @router.post("/upload")
 async def upload_image(image: UploadFile = File(...)):
+    logger = logging.getLogger(__name__)
+    logger.info("=== Starting image upload process ===")
+    
     try:
+        logger.info(f"Received image upload request. Filename: {image.filename}, Content-Type: {image.content_type}")
+        
+        # Read image content
         content = await image.read()
-        # 确保保存目录存在
+        logger.info(f"Successfully read image content. Size: {len(content)} bytes")
+        
+        # Ensure upload directory exists
         save_dir = os.path.join("static", "uploads")
         os.makedirs(save_dir, exist_ok=True)
-        # 生成唯一文件名
+        logger.info(f"Using save directory: {os.path.abspath(save_dir)}")
+        
+        # Generate unique filename
         filename = f"img_{int(time.time())}_{image.filename}"
         save_path = os.path.join(save_dir, filename)
+        logger.info(f"Saving image to: {save_path}")
+        
+        # Save the image file
         with open(save_path, "wb") as f:
             f.write(content)
-        # 返回图片的相对路径
-        return JSONResponse(content={"success": True, "message": "이미지 업로드 성공", "image_url": f"/static/uploads/{filename}"})
+        logger.info("Successfully saved image file")
+        
+        # Analyze image using VLM
+        try:
+            logger.info("Starting image analysis with VLM...")
+            from PIL import Image
+            from app.multimodal.vlm import load_smol_vlm, summarize_scene
+            
+            # Load VLM model
+            logger.info("Loading VLM model...")
+            start_time = time.time()
+            processor, model, device = load_smol_vlm()
+            logger.info(f"VLM model loaded in {time.time() - start_time:.2f} seconds")
+            
+            # Open and analyze image
+            logger.info(f"Opening and analyzing image: {save_path}")
+            img = Image.open(save_path).convert('RGB')
+            logger.info(f"Image opened successfully. Size: {img.size} pixels")
+            
+            start_analysis = time.time()
+            analysis = summarize_scene(img, processor, model, device)
+            analysis_time = time.time() - start_analysis
+            logger.info(f"Image analysis completed in {analysis_time:.2f} seconds")
+            logger.info(f"Analysis result: {analysis[:100]}..." if len(analysis) > 100 else f"Analysis result: {analysis}")
+            
+            response = {
+                "success": True, 
+                "message": "이미지 업로드 및 분석 성공", 
+                "image_url": f"/static/uploads/{filename}",
+                "analysis": analysis
+            }
+            logger.info("Returning successful response with analysis")
+            return JSONResponse(content=response)
+            
+        except Exception as e:
+            logger.error(f"Image analysis error: {str(e)}", exc_info=True)
+            response = {
+                "success": True, 
+                "message": "이미지 업로드 성공 (분석 실패)", 
+                "image_url": f"/static/uploads/{filename}",
+                "analysis": None,
+                "error": str(e)
+            }
+            logger.error(f"Returning response with analysis error: {response}")
+            return JSONResponse(content=response)
+            
     except Exception as e:
-        logging.error(f"Image upload error: {str(e)}")
-        return JSONResponse(status_code=500, content={"success": False, "message": "이미지 업로드 실패", "error": str(e)})
+        logger.error(f"Image upload error: {str(e)}", exc_info=True)
+        response = {
+            "success": False, 
+            "message": "이미지 업로드 실패", 
+            "error": str(e)
+        }
+        logger.error(f"Returning error response: {response}")
+        return JSONResponse(
+            status_code=500, 
+            content=response
+        )

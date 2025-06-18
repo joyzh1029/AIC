@@ -917,10 +917,24 @@ const ChatInterface = () => {
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
           sender: "ai",
-          text: data.response || "사진을 잘 받았어요!",
+          text: data.analysis || data.message || "사진을 잘 받았어요!",
           time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
           messageType: "chat"
         };
+        
+        // 이미지 URL이 있는 경우 업데이트
+        if (data.image_url) {
+          userMessage.image = `${import.meta.env.VITE_API_URL || 'http://localhost:8181'}${data.image_url}`;
+          // 메시지 목록 업데이트
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const messageIndex = newMessages.findIndex(m => m.id === userMessage.id);
+            if (messageIndex !== -1) {
+              newMessages[messageIndex] = { ...userMessage };
+            }
+            return newMessages;
+          });
+        }
         
         setMessages(prev => [...prev, aiMessage]);
       } catch (uploadError) {
