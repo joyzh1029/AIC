@@ -55,12 +55,14 @@ async def unified_conversation_endpoint(
             "emotion_history": [face_emotion, voice_emotion]
         }
 
-        response = generate_response(
-            face_emotion=face_emotion,
-            voice_emotion=voice_emotion,
-            scene=scene,
+        # 감정 합성 (간단한 처리)
+        emotion = face_emotion if face_emotion != "unknown" else voice_emotion
+
+        response = await generate_response(
+            emotion=emotion,
             user_text=user_text,
-            context=context
+            context=context,
+            ai_mbti_persona=None  # 기본 페르소나 사용
         )
 
         return JSONResponse(content={

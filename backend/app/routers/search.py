@@ -27,15 +27,14 @@ async def search_endpoint(request: Request):
             "text": query
         })
 
-    response = generate_response(
-        face_emotion="정보탐색",
-        voice_emotion="정보탐색",
-        scene="검색",
+    response = await generate_response(
+        emotion="정보탐색",
         user_text=query,
         context={
             "search_raw_list": raw_list,
             "user_question": query
         },
+        ai_mbti_persona=None  # 기본 페르소나 사용
     )
 
     return JSONResponse(content={

@@ -1148,7 +1148,7 @@ const ChatInterface = () => {
       // 构建URL参数
       const params = new URLSearchParams({
         text: text,
-        voice_id: "Korean_WiseElf",
+        voice_id: "Korean_SweetGirl",
         speed: "1.0",
         vol: "1.0"
       });
@@ -1593,7 +1593,7 @@ const ChatInterface = () => {
               {isRecording && (
                 <div className="flex items-center px-4 text-red-500 text-sm">
                   <span className="animate-pulse mr-2">●</span>
-                  录音中 {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
+                  녹음 중 {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
                 </div>
               )}
               <input

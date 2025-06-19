@@ -15,7 +15,7 @@ router = APIRouter(
 # POST 요청용 데이터 모델
 class TTSRequest(BaseModel):
     text: str
-    voice_id: str = "Korean_WiseElf"
+    voice_id: str = "Korean_SweetGirl"
     speed: float = 1.0
     vol: float = 1.0
     audio_sample_rate: int = 24000
@@ -70,7 +70,7 @@ async def tts_post(request: TTSRequest):
 @router.get("/generate")
 async def generate_tts(
     text: str = Query(..., description="TTS로 변환할 텍스트입니다."),
-    voice_id: str = "Korean_WiseElf",
+    voice_id: str = "Korean_SweetGirl",
     speed: float = 1.0,
     vol: float = 1.0,
     audio_sample_rate: int = 24000,

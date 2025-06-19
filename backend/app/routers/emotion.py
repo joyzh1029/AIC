@@ -79,7 +79,15 @@ async def analyze_emotion(
             "emotion_history": [face_emotion, voice_emotion]
         }
 
-        response = generate_response(face_emotion, voice_emotion, scene, final_text, context)
+        # 감정 합성 (간단한 처리)
+        emotion = face_emotion if face_emotion != "unknown" else voice_emotion
+
+        response = await generate_response(
+            emotion=emotion,
+            user_text=final_text,
+            context=context,
+            ai_mbti_persona=None  # 기본 페르소나 사용
+        )
         print("✅ Gemini 응답 완료")
 
         # 清理临时文件

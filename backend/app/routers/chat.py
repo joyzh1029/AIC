@@ -34,11 +34,10 @@ async def chat_endpoint(request: ChatRequest):
     try:
         # 기본 컨텍스트 설정
         context = request.context or {
-            "weather": "맑음",
-            "sleep": "7시간",
-            "stress": "중간",
-            "location_scene": "실내, 책상 앞",
-            "emotion_history": ["neutral", "neutral", "neutral"]
+            "weather": "알 수 없음",
+            "sleep": "알 수 없음",
+            "stress": "알 수 없음",
+            "emotion_history": []
         }
         
         # 사용자 메시지 추출
@@ -81,14 +80,12 @@ async def chat_endpoint(request: ChatRequest):
         if vlm_analysis:
             logging.info(f"Using VLM analysis in response generation: {vlm_analysis[:100]}...")
 
-        # 응답 생성
-        response_text = generate_response(
-            face_emotion=face_emotion,
-            voice_emotion=voice_emotion,
-            scene=context.get("location_scene", "실내, 책상 앞"),
+        # 응답 생성 - 새로운 async 함수 사용
+        response_text = await generate_response(
+            emotion=emotion,
             user_text=user_text,
             context=context,
-            vlm_analysis=vlm_analysis
+            ai_mbti_persona=ai_mbti  # ✨ AI MBTI 페르소나 전달
         )
         logging.info(f"LLM generated response: {response_text}")
 
@@ -172,13 +169,11 @@ async def upload_image(image: UploadFile = File(...)):
                 }
                 
                 # Generate a response that includes the VLM analysis
-                ai_response = generate_response(
-                    face_emotion="neutral",
-                    voice_emotion="neutral",
-                    scene=f"이미지 분석 결과: {analysis}",
+                ai_response = await generate_response(
+                    emotion="neutral",
                     user_text="이 사진을 분석해줘",
                     context=vlm_context,
-                    vlm_analysis=analysis
+                    ai_mbti_persona=None  # 기본 페르소나 사용
                 )
                 
                 response = {

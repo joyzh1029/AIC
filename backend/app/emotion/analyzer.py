@@ -75,13 +75,22 @@ def analyze_loop(vlm_model, processor, device, whisper_model):
 
         print_emotion_summary(emotion_logs)
 
-        response = generate_response(
-            final_face,
-            final_voice_emotion,
-            last_scene,
-            all_texts,
-            context
-        )
+        # 감정 합성 (간단한 처리)
+        emotion = final_face if final_face != "unknown" else final_voice_emotion
+
+        # 비동기 함수 호출을 위한 처리
+        import asyncio
+        try:
+            response = asyncio.run(generate_response(
+                emotion=emotion,
+                user_text=all_texts,
+                context=context,
+                ai_mbti_persona=None  # 기본 페르소나 사용
+            ))
+        except Exception as e:
+            print(f"응답 생성 중 오류: {e}")
+            response = "죄송합니다, 응답을 생성할 수 없습니다."
+            
         print("\n🧠 Gemini 응답:")
         print(response)
     else:

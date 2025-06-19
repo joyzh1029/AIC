@@ -97,12 +97,11 @@ async def transcribe_voice(audio: UploadFile = File(...)):
             "emotion_history": ["平静", "开心"]  # 这里可以接入实际的情感历史数据
         }
 
-        llm_response = generate_response(
-            face_emotion="未知",  # 如果有人脸分析可以传入实际值
-            voice_emotion=voice_emotion,
-            scene="室内",  # 如果有场景分析可以传入实际值
+        llm_response = await generate_response(
+            emotion=voice_emotion,  # 음성 감정을 emotion으로 사용
             user_text=text,
-            context=context
+            context=context,
+            ai_mbti_persona=None  # 기본 페르소나 사용
         )
 
         # 清理临时文件
