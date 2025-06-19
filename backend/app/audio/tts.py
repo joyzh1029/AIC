@@ -31,7 +31,7 @@ async def tts_post(request: TTSRequest):
         raise HTTPException(status_code=400, detail="텍스트를 입력해주세요.")
 
     payload = {
-        "model": "speech-02-hd",
+        "model": "speech-02",
         "text": request.text,
         "voice_id": request.voice_id,
         "speed": request.speed,
@@ -70,7 +70,7 @@ async def tts_post(request: TTSRequest):
 @router.get("/generate")
 async def generate_tts(
     text: str = Query(..., description="TTS로 변환할 텍스트입니다."),
-    voice_id: str = "female-tianmei-jingpin",
+    voice_id: str = "Korean_WiseElf",
     speed: float = 1.0,
     vol: float = 1.0,
     audio_sample_rate: int = 24000,
@@ -87,7 +87,7 @@ async def generate_tts(
         raise HTTPException(status_code=400, detail="텍스트를 입력해주세요.")
 
     payload = {
-        "model": "speech-02-hd",
+        "model": "speech-02",  # Updated to use the correct model name
         "text": text,
         "voice_id": voice_id,
         "speed": speed,

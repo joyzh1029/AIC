@@ -1148,7 +1148,7 @@ const ChatInterface = () => {
       // 构建URL参数
       const params = new URLSearchParams({
         text: text,
-        voice_id: "female-tianmei-jingpin",
+        voice_id: "Korean_WiseElf",
         speed: "1.0",
         vol: "1.0"
       });
