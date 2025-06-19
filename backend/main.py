@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRouter
 
 # 환경 변수 로드
 load_dotenv(override=True)  # Force reload environment variables
@@ -34,14 +35,13 @@ if os.path.exists(FFMPEG_DIR):
 # Add backend directory to Python path for relative imports
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(BACKEND_DIR)
-sys.path.insert(0, PARENT_DIR)  # Add parent directory to path
-sys.path.insert(0, BACKEND_DIR)  # Add backend directory to path
-logger.info(f"Added {BACKEND_DIR} to Python path")
+sys.path.insert(0, BACKEND_DIR)  # Add backend directory to path first
+sys.path.insert(0, PARENT_DIR)  # Add parent directory to path second
+logger.info(f"Added {BACKEND_DIR} and {PARENT_DIR} to Python path")
 
 # 코어 모듈 임포트
 try:
     from app.core.startup import initialize_models, start_background_threads, initialize_directories, shutdown_threads
-    from app.routers import api_router
     logger.info("Core startup modules imported successfully")
 except ImportError as e:
     logger.warning(f"Core startup modules not found or incomplete: {str(e)}")
@@ -55,7 +55,7 @@ except ImportError:
     logger.warning("WebSocket router not found")
     websocket_router = None
 
-# API 라우터 가져오기
+# API 라우터 가져오기 (只保留一次导入)
 try:
     from app.routers import api_router
     logger.info("API router imported successfully.")

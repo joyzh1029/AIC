@@ -1,4 +1,3 @@
-
 import Header from "@/components/Header";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -14,7 +13,6 @@ import ChatPage from "./pages/ChatPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import RealtimeChat from "./pages/RealtimeChat";
-import GeminiSearchAgent from "./pages/GeminiSearchAgent";
 import { UserProvider } from "@/contexts/UserContext";
 
 const queryClient = new QueryClient();
@@ -38,7 +36,6 @@ const App = () => {
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/realtime-chat" element={<RealtimeChat />} />
-                <Route path="/gemini-search" element={<GeminiSearchAgent />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

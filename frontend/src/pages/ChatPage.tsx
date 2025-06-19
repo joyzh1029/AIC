@@ -82,6 +82,8 @@ const useSearchStream = (config: {
   const [messages, setMessages] = useState<SearchStreamMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const maxRetries = 3;
+  const retryDelay = 1000; // 1 second
 
   const submit = useCallback(async (params: {
     messages: SearchStreamMessage[];
@@ -90,40 +92,49 @@ const useSearchStream = (config: {
     reasoning_model: string;
   }) => {
     setIsLoading(true);
-    abortControllerRef.current = new AbortController();
+    let retryCount = 0;
 
-    try {
-      const response = await fetch(`${config.apiUrl}/api/search/stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: params.messages,
-          initial_search_query_count: params.initial_search_query_count,
-          max_research_loops: params.max_research_loops,
-          reasoning_model: params.reasoning_model,
-        }),
-        signal: abortControllerRef.current.signal,
-      });
+    const attemptSubmit = async (): Promise<void> => {
+      try {
+        abortControllerRef.current = new AbortController();
 
-      if (!response.ok) {
-        throw new Error('Search request failed');
-      }
+        const response = await fetch(`${config.apiUrl}/api/search/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: params.messages[params.messages.length - 1]?.content || "",
+            initial_search_query_count: params.initial_search_query_count,
+            max_research_loops: params.max_research_loops,
+            reasoning_model: params.reasoning_model,
+          }),
+          signal: abortControllerRef.current.signal,
+        });
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+          throw new Error(errorData.error || `Search request failed with status ${response.status}`);
+        }
 
-      if (reader) {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('Response body is not readable');
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            if (line.trim() && line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6));
                 
@@ -136,40 +147,56 @@ const useSearchStream = (config: {
                     id: Date.now().toString(),
                   };
                   setMessages(prev => [...prev, newMessage]);
+                } else if (data.type === 'error') {
+                  const errorMessage: SearchStreamMessage = {
+                    type: 'ai',
+                    content: `⚠️ ${data.content}`,
+                    id: Date.now().toString(),
+                  };
+                  setMessages(prev => [...prev, errorMessage]);
+                  throw new Error(data.content);
                 } else if (data.type === 'finish') {
                   config.onFinish(data);
                 }
               } catch (e) {
                 console.error('Error parsing SSE data:', e);
+                if (e instanceof Error && e.message !== 'Unexpected end of JSON input') {
+                  throw e;
+                }
               }
             }
           }
         }
-      }
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.log('Search request aborted');
+          return;
+        }
+
         console.error('Search stream error:', error);
         
-        if (error.message && error.message.includes('429')) {
-          const quotaErrorMessage: SearchStreamMessage = {
-            type: 'ai',
-            content: '⚠️ Google API 할당량이 한도에 도달했습니다. 잠시 후 다시 시도해 주세요. (오류 코드: 429 RESOURCE_EXHAUSTED)',
-            id: Date.now().toString(),
-          };
-          setMessages(prev => [...prev, quotaErrorMessage]);
-        } else {
-          const errorMessage: SearchStreamMessage = {
-            type: 'ai',
-            content: `⚠️ 검색 요청 실패: ${error.message || '알 수 없는 오류'}`,
-            id: Date.now().toString(),
-          };
-          setMessages(prev => [...prev, errorMessage]);
+        if (retryCount < maxRetries && error.message !== 'GEMINI_API_KEY is not configured') {
+          retryCount++;
+          console.log(`Retrying search request (${retryCount}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          return attemptSubmit();
+        }
+
+        const errorMessage: SearchStreamMessage = {
+          type: 'ai',
+          content: `⚠️ 검색 요청 실패: ${error.message || '알 수 없는 오류'}`,
+          id: Date.now().toString(),
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      } finally {
+        if (retryCount >= maxRetries) {
+          setIsLoading(false);
+          abortControllerRef.current = null;
         }
       }
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
+    };
+
+    await attemptSubmit();
   }, [config]);
 
   const stop = useCallback(() => {
@@ -543,57 +570,21 @@ const ChatInterface = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [searchStatus, setSearchStatus] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Custom search stream hook
   const searchStream = useSearchStream({
-    apiUrl: "http://localhost:8181",
-    onFinish: (event: any) => {
-      console.log("Search finished:", event);
+    apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8080',
+    onUpdateEvent: (event) => {
+      console.log('Search status update:', event);
+      setSearchStatus(event.status || '');
     },
-    onUpdateEvent: (event: any) => {
-      let processedEvent: ProcessedEvent | null = null;
-      if (event.generate_query) {
-        processedEvent = {
-          title: "검색 쿼리 생성 중",
-          data: event.generate_query.query_list.join(", "),
-        };
-      } else if (event.web_research) {
-        const sources = event.web_research.sources_gathered || [];
-        const numSources = sources.length;
-        const uniqueLabels = [
-          ...new Set(sources.map((s: any) => s.label).filter(Boolean)),
-        ];
-        const exampleLabels = uniqueLabels.slice(0, 3).join(", ");
-        processedEvent = {
-          title: "웹 리서치",
-          data: `${numSources}개의 소스 수집. 관련 주제: ${
-            exampleLabels || "N/A"
-          }.`,
-        };
-      } else if (event.reflection) {
-        processedEvent = {
-          title: "검토 중",
-          data: event.reflection.is_sufficient
-            ? "검색 성공, 최종 답변 생성 중."
-            : `더 많은 정보 필요, 추가 검색: ${event.reflection.follow_up_queries.join(
-                ", "
-              )}`,
-        };
-      } else if (event.finalize_answer) {
-        processedEvent = {
-          title: "답변 완성",
-          data: "최종 답변을 작성하고 있습니다.",
-        };
-      }
-      if (processedEvent) {
-        setProcessedEventsTimeline((prevEvents) => [
-          ...prevEvents,
-          processedEvent!,
-        ]);
-      }
-    },
+    onFinish: (data) => {
+      console.log('Search finished:', data);
+      setSearchStatus('검색이 완료되었습니다.');
+    }
   });
-  
+
   // URL 파라미터 처리
   useEffect(() => {
     const params = {
@@ -1103,32 +1094,51 @@ const ChatInterface = () => {
     }
   };
 
-  // 검색 쿼리 전송
+  // 검색 쿼리 전송 - 传统流式搜索实现
   const sendSearchQuery = async (queryText: string) => {
     try {
-      const res = await fetch("http://localhost:8181/search/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: queryText }),
+      setIsLoading(true);
+      
+      // 添加用户的搜索消息
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        sender: "user",
+        text: queryText,
+        time: new Date().toLocaleTimeString(),
+        messageType: "search"
+      };
+      setMessages(prev => [...prev, userMessage]);
+
+      // 提交搜索请求
+      await searchStream.submit({
+        messages: [{
+          type: "human",
+          content: queryText,
+          id: Date.now().toString()
+        }],
+        initial_search_query_count: 2,
+        max_research_loops: 2,
+        reasoning_model: "gemini-2.0-flash"
       });
 
-      const data = await res.json();
-
-      if (data.success) {
+      // 添加搜索结果消息
+      searchStream.messages.forEach(msg => {
         const aiMessage: Message = {
-          id: Date.now().toString(),
+          id: msg.id,
           sender: "ai",
-          text: data.response,
-          time: new Date().toLocaleTimeString("ko-KR", { hour: 'numeric', minute: '2-digit', hour12: true }),
+          text: msg.content,
+          time: new Date().toLocaleTimeString(),
           messageType: "search"
         };
         setMessages(prev => [...prev, aiMessage]);
-      } else {
-        toast.error("검색 실패: " + (data.message || "결과 없음"));
-      }
-    } catch (err) {
-      console.error("검색 요청 오류:", err);
-      toast.error("검색 요청 실패");
+      });
+
+    } catch (error) {
+      console.error("Search error:", error);
+      toast.error("검색 중 오류가 발생했습니다.");
+    } finally {
+      setIsLoading(false);
+      setSearchStatus("");
     }
   };
 
@@ -1202,19 +1212,9 @@ const ChatInterface = () => {
     setInputMessage("");
 
     try {
-      if (messageType === "search" || isSearchMode) {
-        // 검색 모드 처리
-        const searchMessages = [
-          ...searchStream.messages,
-          { type: "human" as const, content: textToSend, id: Date.now().toString() }
-        ];
-
-        await searchStream.submit({
-          messages: searchMessages,
-          initial_search_query_count: searchEffort === "low" ? 1 : searchEffort === "medium" ? 2 : 3,
-          max_research_loops: searchEffort === "low" ? 1 : searchEffort === "medium" ? 2 : 3,
-          reasoning_model: "gpt-4o-mini"
-        });
+      if (messageType === "search") {
+        // 独立搜索处理 - 使用传统流式搜索
+        await sendSearchQuery(textToSend);
       } else if (messageType === "schedule") {
         // 일정 관리 처리
         const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8181'}/api/schedule/chat`, {
@@ -1278,7 +1278,20 @@ const ChatInterface = () => {
       console.error('메시지 전송 실패:', error);
       toast.error("메시지 전송 중 오류가 발생했습니다. 다시 시도해주세요.");
     }
-  }, [inputMessage, isSearchMode, searchStream, searchEffort, chatState]);
+  }, [inputMessage, chatState]);
+
+  // 添加handleSearch函数
+  const handleSearch = async () => {
+    if (!inputMessage.trim()) return;
+    
+    try {
+      await sendSearchQuery(inputMessage.trim());
+      setInputMessage("");
+    } catch (error) {
+      console.error("Search error:", error);
+      toast.error("검색 중 오류가 발생했습니다.");
+    }
+  };
 
   // 新增：上传已有照片
   const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1465,34 +1478,10 @@ const ChatInterface = () => {
             </Avatar>
             <div className="ml-3">
               <h2 className="font-semibold text-gray-800">{chatState.aiName}</h2>
-              <p className="text-xs text-gray-500">
-                {isSearchMode ? "검색 모드 🔍" : "활동중 상태"}
-              </p>
+              <p className="text-xs text-gray-500">활동중 상태</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <button 
-              onClick={() => setIsSearchMode(!isSearchMode)} 
-              className={`p-2 rounded-full transition duration-300 ease-in-out ${
-                isSearchMode 
-                  ? 'bg-purple-100 text-purple-600' 
-                  : 'hover:bg-gray-100 text-gray-500'
-              }`}
-              title="검색 모드 전환"
-            >
-              <Search className="h-5 w-5" />
-            </button>
-            {isSearchMode && (
-              <select
-                value={searchEffort}
-                onChange={(e) => setSearchEffort(e.target.value as "low" | "medium" | "high")}
-                className="text-xs px-2 py-1 border rounded-md"
-              >
-                <option value="low">빠른 검색</option>
-                <option value="medium">일반 검색</option>
-                <option value="high">심층 검색</option>
-              </select>
-            )}
             <button 
               onClick={() => setShowTodoistPanel(true)}
               className="p-2 rounded-full hover:bg-green-100 transition duration-300 ease-in-out relative"
@@ -1583,11 +1572,6 @@ const ChatInterface = () => {
 
         {/* Input Section */}
         <div className="p-4 bg-gray-50 border-t">
-          {isSearchMode && (
-            <div className="mb-2 px-2 py-1 bg-purple-100 rounded-lg text-sm text-purple-700">
-              🔍 검색 모드가 활성화되었습니다. 궁금한 것을 물어보세요!
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center bg-white border rounded-full">
               {isRecording && (
@@ -1600,7 +1584,7 @@ const ChatInterface = () => {
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder={isRecording ? "录音完成后将自动转换为文字..." : (isSearchMode ? "검색할 내용을 입력하세요..." : "메시지를 입력하세요...")}
+                placeholder={isRecording ? "录音完成后将自动转换为文字..." : "메시지를 입력하세요..."}
                 className="flex-1 px-4 py-2 bg-transparent focus:outline-none text-sm"
                 disabled={isRecording}
                 onKeyDown={(e) => {
@@ -1610,18 +1594,6 @@ const ChatInterface = () => {
                   }
                 }}
               />
-              <button 
-                className={`p-2 rounded-full transition-all duration-300 ${
-                  isSearchMode 
-                    ? 'bg-purple-100 text-purple-600' 
-                    : 'hover:bg-gray-100 text-gray-500'
-                }`}
-                onClick={() => setIsSearchMode(!isSearchMode)}
-                title="검색 모드 전환"
-                disabled={isRecording}
-              >
-                <Search className="h-5 w-5" />
-              </button>
               <button 
                 className={`p-2 hover:bg-gray-100 rounded-full mr-1 ${
                   isRecording 
@@ -1648,19 +1620,37 @@ const ChatInterface = () => {
                 <Camera className="h-5 w-5 text-gray-500" />
               </button>
             </div>
+            {/* 独立搜索按钮 */}
+            <button 
+              onClick={handleSearch} 
+              className="shrink-0 h-10 w-10 rounded-full bg-purple-500 hover:bg-purple-600 text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!inputMessage.trim() || isLoading}
+              title="검색"
+            >
+              {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Search className="h-5 w-5" />
+              )}
+            </button>
+            {/* 发送消息按钮 */}
             <button 
               onClick={() => handleSendMessage()} 
-              className={`shrink-0 h-10 w-10 rounded-full ${
-                isSearchMode 
-                  ? 'bg-purple-500 hover:bg-purple-600' 
-                  : 'bg-blue-500 hover:bg-blue-600'
-              } text-white flex items-center justify-center transition-colors`}
-              disabled={!inputMessage.trim() || (isSearchMode && searchStream.isLoading)}
+              className="shrink-0 h-10 w-10 rounded-full bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!inputMessage.trim() || isLoading}
+              title="메시지 전송"
             >
               <Send className="h-5 w-5" />
             </button>
           </div>
         </div>
+
+        {/* Show search status if any */}
+        {searchStatus && (
+          <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+            {searchStatus}
+          </div>
+        )}
 
         {/* Bottom Navigation */}
         <nav className="px-4 py-2 grid grid-cols-4 border-t bg-white">

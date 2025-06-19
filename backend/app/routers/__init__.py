@@ -9,28 +9,27 @@ from typing import Callable, List, Dict, Any
 api_router = APIRouter()
 
 # chat_router
-from app.routers.chat import router as chat_router
+from .chat import router as chat_router
 api_router.include_router(chat_router)
 
-from app.routers.emotion import router as emotion_router
+from .emotion import router as emotion_router
 api_router.include_router(emotion_router)
 
-from app.routers.schedule_chat import router as schedule_chat_router
-from app.routers.mbti import router as mbti_router
-from app.routers.user import router as user_router
-from app.routers.avatar import router as avatar_router
-from app.routers.audio import router as audio_router
-from app.audio.tts import router as tts_router
-#from app.routers.search import router as search_router 
+from .schedule_chat import router as schedule_chat_router
+from .mbti import router as mbti_router
+from .user import router as user_router
+from .avatar import router as avatar_router
+from .audio import router as audio_router
+from ..audio.tts import router as tts_router
+from .search import router as search_router 
 
-api_router.include_router(emotion_router)
 api_router.include_router(schedule_chat_router)
 api_router.include_router(mbti_router)
 api_router.include_router(user_router)
 api_router.include_router(avatar_router)
 api_router.include_router(audio_router)
 api_router.include_router(tts_router)
-#api_router.include_router(search_router)
+api_router.include_router(search_router)
 
 # main.py에서 한 번에 등록할 수 있도록 모든 라우터 내보내기
 __all__ = ["api_router"]

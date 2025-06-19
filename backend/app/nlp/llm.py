@@ -4,8 +4,8 @@ import google.generativeai as genai
 import os
 import logging
 from typing import Optional
-from app.nlp.response_formatter import format_llm_response
-from app.core.mbti_data import MBTI_PERSONAS
+from ..nlp.response_formatter import format_llm_response
+from ..core.mbti_data import MBTI_PERSONAS
 
 # ✨ 전역 Gemini 모델 변수 추가
 _gemini_model = None
