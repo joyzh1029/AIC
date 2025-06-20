@@ -1,8 +1,12 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Sun, MessageCircle, Home, Settings, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAiFriend } from "@/contexts/AiFriendContext";
 
 const Profile = () => {
+  const { aiFriendName } = useAiFriend();
+  const { aiFriendImage } = useAiFriend();
+  const navigate = useNavigate();
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Left Sidebar */}
@@ -18,7 +22,12 @@ const Profile = () => {
             <Heart className="h-5 w-5 text-pink-500 fill-pink-500" />
             <h1 className="text-lg font-medium">My AI Chingu</h1>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 hover:bg-gray-100"
+            onClick={() => navigate("/settings")}
+          >
             <Settings className="h-5 w-5" />
           </Button>
         </header>
@@ -29,15 +38,19 @@ const Profile = () => {
             {/* AI Profile Card */}
             <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
               <div className="flex justify-center mb-4">
-                <img 
-                  src="/example_avatar_profile.png" 
-                  alt="AI Friend" 
+                <img
+                  src={aiFriendImage || "/example_avatar_profile.png"}
+                  alt="AI Friend"
                   className="w-24 h-24 rounded-full"
                 />
               </div>
-              <h2 className="text-xl font-medium mb-1">미나</h2>
-              <p className="text-gray-500 text-sm mb-4">오늘 날씨가 좋아서 기분이 상쾌해!</p>
-              
+              <h2 className="text-xl font-medium mb-1">
+                {aiFriendName || "미나"}
+              </h2>
+              <p className="text-gray-500 text-sm mb-4">
+                오늘 날씨가 좋아서 기분이 상쾌해!
+              </p>
+
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-gray-50 rounded-xl p-4">
@@ -57,9 +70,15 @@ const Profile = () => {
 
               {/* Tags */}
               <div className="flex flex-wrap gap-2 justify-center mb-6">
-                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm">#평화로운성격</span>
-                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm">#산책중</span>
-                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm">#운동중</span>
+                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm">
+                  #평화로운성격
+                </span>
+                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm">
+                  #산책중
+                </span>
+                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm">
+                  #운동중
+                </span>
               </div>
 
               {/* Action Buttons */}
@@ -77,15 +96,24 @@ const Profile = () => {
 
         {/* Bottom Navigation */}
         <nav className="py-2 grid grid-cols-3 border-t bg-white">
-          <Link to="/" className="flex flex-col items-center justify-center">
+          <Link
+            to="/signup"
+            className="flex flex-col items-center justify-center"
+          >
             <Home className="h-6 w-6 text-gray-400" />
             <span className="text-[11px] text-gray-400 mt-1">홈</span>
           </Link>
-          <Link to="/chat" className="flex flex-col items-center justify-center">
+          <Link
+            to="/chat"
+            className="flex flex-col items-center justify-center"
+          >
             <MessageCircle className="h-6 w-6 text-gray-400" />
             <span className="text-[11px] text-gray-400 mt-1">채팅</span>
           </Link>
-          <Link to="/profile" className="flex flex-col items-center justify-center">
+          <Link
+            to="/profile"
+            className="flex flex-col items-center justify-center"
+          >
             <Sun className="h-6 w-6 text-blue-500" />
             <span className="text-[11px] text-blue-500 mt-1">프로필</span>
           </Link>
