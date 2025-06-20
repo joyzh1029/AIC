@@ -36,10 +36,18 @@ AIC/
 │   │   ├── tts.py          # FastAPI TTS 서버
 │   │   └── tts_audio/      # 오디오 파일 저장소
 │   │       └── example.mp3 # 음성 재생 테스트용 샘플 파일
-│   ├── uploads/             # 사용자 업로드 파일 저장소
+│   ├── uploads/            # 사용자 업로드 파일 저장소
 │   │   ├── original/       # 원본 사진 저장
 │   │   └── generated/      # 생성된 아바타 저장
-│   └── avata_generate.py   # 아바타 생성 모듈
+│   ├── avata_generate.py   # 아바타 생성 모듈
+│   │
+│   │
+│   │
+│   └── routers/
+│         └─  ...           # ComfyUI 관련
+│
+│
+│
 ├── frontend/               # 프론트엔드 애플리케이션
 │   ├── public/             # 정적 파일
 │   ├── src/                # 소스 파일
@@ -75,6 +83,7 @@ cd AIC
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 # 기본적으로 PyPI에서 패키지를 찾고, 없는 경우 'https://download.pytorch.org/whl/cu118' 경로에서 찾겠다는 의미(extra index)
 
+
 # fer 패키지 별도 설치 (의존성 체크 없이)
 pip install fer==22.5.1 --no-deps
 # pip freeze 명령어로 requirements.txt 파일 생성 시, fer 패키지는 제외할 것
@@ -85,13 +94,10 @@ pip install fer==22.5.1 --no-deps
 cd backend
 pip install fastapi uvicorn python-multipart
 
-# 재훈님 작업물 테스트 (루트 디렉토리에서 실행)
-python -m backend.main
+# !!! 따로 추가 설치, 의존성 충돌 발생 가능
+pip install firebase_admin websocket websockets websocket-client tf-keras chromadb sentence_transformers
 
-# TTS 서버가 실행 중이어야 음성 출력 가능
-# 현재는 예제 오디오 파일(example.mp3) 재생
-cd TTS
-python -m uvicorn tts:app --host 0.0.0.0 --port 8181 --reload
+터미널에서 python main.py로 실행
 ```
 
 ### 4. 프론트엔드 설정 및 실행
