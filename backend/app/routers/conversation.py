@@ -8,6 +8,7 @@ from app.emotion.fer_emotion import analyze_facial_expression
 from app.emotion.ser_emotion import analyze_voice_emotion_korean
 from app.multimodal.vlm import summarize_scene, load_smol_vlm
 from app.nlp.llm import generate_response
+from app.core.data_generator import generate_environment_context
 
 router = APIRouter(prefix="/api/conversation", tags=["conversation"])
 
@@ -50,10 +51,11 @@ async def unified_conversation_endpoint(
         voice_emotion = analyze_voice_emotion_korean(audio_path)
         scene = summarize_scene(pil_image, processor, vlm_model, device)
 
-        context = {
-            "location_scene": scene,
-            "emotion_history": [face_emotion, voice_emotion]
-        }
+        # 환경 컨텍스트 데이터 생성 (실제 감지된 얼굴과 음성 감정 사용)
+        context_data = generate_environment_context(face_emotion=face_emotion, voice_emotion=voice_emotion)
+        context_data["location_scene"] = scene  # 장면 분석 결과 추가
+
+        print(f"생성된 환경 데이터: {context_data}")
 
         # 감정 합성 (간단한 처리)
         emotion = face_emotion if face_emotion != "unknown" else voice_emotion
@@ -61,7 +63,7 @@ async def unified_conversation_endpoint(
         response = await generate_response(
             emotion=emotion,
             user_text=user_text,
-            context=context,
+            context=context_data,
             ai_mbti_persona=None  # 기본 페르소나 사용
         )
 

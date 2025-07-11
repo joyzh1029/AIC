@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, Phone, PhoneOff, Camera, MessageSquare, X, Volume2, VolumeX, ChevronLeft, Square, Loader2, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,20 +10,35 @@ interface Message {
   isTranslated?: boolean;
 }
 
+// btoa的polyfill，用于在非浏览器环境中（如测试）安全使用
+const safeBtoa = (str: string) => {
+  if (typeof btoa === 'function') {
+    return btoa(str);
+  }
+  if (typeof Buffer === 'function') {
+    return Buffer.from(str, 'binary').toString('base64');
+  }
+  return '';
+};
+
 const RealtimeChat: React.FC = () => {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [showConversation, setShowConversation] = useState(false);
+  // --- STATE MANAGEMENT ---
+  const [isSessionActive, setIsSessionActive] = useState(false); // 管理整体连接会话
+  const [isRecording, setIsRecording] = useState(false); // 管理单轮对话的麦克风录音状态
+  const [isAiSpeaking, setIsAiSpeaking] = useState(false); // 管理AI音频的播放状态
+  const [showConversation, setShowConversation] = useState(false); // 控制对话历史记录的显示
+
   const [currentText, setCurrentText] = useState('원을 터치하여 시작');
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [minimaxConnected, setMinimaxConnected] = useState(false);
-  const [audioBuffer, setAudioBuffer] = useState<ArrayBuffer[]>([]);
   
+  // --- REFS ---
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const webSocketRef = useRef<WebSocket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const userStreamRef = useRef<MediaStream | null>(null);
   const currentAiResponseIdRef = useRef<string | null>(null);
   const audioBufferRef = useRef<ArrayBuffer[]>([]);
   const navigate = useNavigate();
@@ -39,34 +54,254 @@ const RealtimeChat: React.FC = () => {
   // Cleanup on component unmount
   useEffect(() => {
     return () => {
-      if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
-        webSocketRef.current.close(1000, 'Component unmounting');
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
+      endSession(); // 确保所有资源被释放
     };
   }, []);
 
+  // --- RECORDING TURN MANAGEMENT ---
+  const stopRecordingTurn = useCallback(async () => {
+    if (!userStreamRef.current) return;
+    setIsRecording(false);
+    setCurrentText('음성 처리 중...');
+
+    userStreamRef.current.getTracks().forEach(track => track.stop());
+    userStreamRef.current = null;
+    
+    if (mediaStreamSourceRef.current) {
+        mediaStreamSourceRef.current.disconnect();
+        mediaStreamSourceRef.current = null;
+    }
+
+    if (webSocketRef.current?.readyState === WebSocket.OPEN) {
+        webSocketRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    }
+  }, []);
+
+  const startRecordingTurn = useCallback(async () => {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        console.error("AudioContext not ready.");
+        setConnectionError("오디오 서비스를 시작할 수 없습니다.");
+        return;
+    }
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+        userStreamRef.current = stream;
+
+        mediaStreamSourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+        if (audioWorkletNodeRef.current) {
+            mediaStreamSourceRef.current.connect(audioWorkletNodeRef.current);
+            setIsRecording(true);
+            setCurrentText('... 듣는 중 ...');
+        } else {
+            throw new Error("AudioWorklet not initialized");
+        }
+    } catch (err) {
+        console.error('Error starting audio capture:', err);
+        setConnectionError('마이크 접근 또는 오디오 처리에 실패했습니다.');
+        setIsRecording(false);
+    }
+  }, []);
+
+
+  // --- CONNECTION & SESSION MANAGEMENT ---
+  const endSession = useCallback(async () => {
+    if (!isSessionActive) {
+      return;
+    }
+    console.log("Ending session...");
+    
+    setIsSessionActive(false); // Set state first to prevent re-entry
+
+    if (isRecording) {
+      await stopRecordingTurn();
+    }
+    
+    if (webSocketRef.current) {
+      webSocketRef.current.onclose = null;
+      webSocketRef.current.onerror = null;
+      if (webSocketRef.current.readyState === WebSocket.OPEN) {
+        webSocketRef.current.close(1000, 'Session ended by user');
+      }
+      webSocketRef.current = null;
+    }
+
+    if (userStreamRef.current) {
+        userStreamRef.current.getTracks().forEach(track => track.stop());
+        userStreamRef.current = null;
+    }
+    if (mediaStreamSourceRef.current) {
+        mediaStreamSourceRef.current.disconnect();
+        mediaStreamSourceRef.current = null;
+    }
+    if (audioWorkletNodeRef.current) {
+        audioWorkletNodeRef.current.port.onmessage = null;
+        audioWorkletNodeRef.current.disconnect();
+        audioWorkletNodeRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      await audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    
+    setIsRecording(false);
+    setIsAiSpeaking(false);
+    setCurrentText('원을 터치하여 시작');
+    
+  }, [isSessionActive, isRecording, stopRecordingTurn]);
+
+  const startSession = useCallback(async () => {
+    if (isSessionActive) return;
+    
+    setCurrentText('Node.js 프록시 연결 중...');
+    setConnectionError(null);
+    currentAiResponseIdRef.current = null;
+    audioBufferRef.current = [];
+
+    try {
+        if (!window.AudioContext || !window.AudioWorklet) {
+            throw new Error('브라우저가 Web Audio API를 지원하지 않습니다.');
+        }
+        audioContextRef.current = new window.AudioContext({ sampleRate: 48000 });
+        await audioContextRef.current.audioWorklet.addModule('/pcm-processor.js');
+        audioWorkletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'pcm-processor', {
+            processorOptions: { targetSampleRate: 24000 }
+        });
+
+        audioWorkletNodeRef.current.port.onmessage = (event) => {
+            const pcm16Buffer = event.data;
+            const pcm16Array = new Uint8Array(pcm16Buffer);
+            const base64Audio = safeBtoa(String.fromCharCode.apply(null, Array.from(pcm16Array)));
+            
+            if (webSocketRef.current?.readyState === WebSocket.OPEN) {
+                webSocketRef.current.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: base64Audio }));
+            }
+        };
+
+        const clientId = `user-${Date.now()}`;
+        const wsUrl = `ws://localhost:3003/ws/realtime-chat?client_id=${clientId}`;
+        const ws = new WebSocket(wsUrl);
+        webSocketRef.current = ws;
+
+        ws.onopen = () => {
+            console.log('WebSocket connected. Audio system is ready.');
+            setIsSessionActive(true);
+            setCurrentText('🎤 탭하여 말하기');
+        };
+    
+        ws.onmessage = async (event) => {
+            const messageData = JSON.parse(event.data);
+            console.log('Received from Node.js proxy:', messageData.type);
+        
+            switch (messageData.type) {
+                case 'response.created':
+                    setIsAiSpeaking(true);
+                    setCurrentText('AI가 응답 생성 중...');
+                    break;
+                case 'response.audio_transcript.delta':
+                    if (messageData.delta) {
+                        if (!currentAiResponseIdRef.current) { currentAiResponseIdRef.current = `ai-${Date.now()}`; }
+                        addMessageToChat(currentAiResponseIdRef.current, 'avatar', messageData.delta, true);
+                    }
+                    break;
+                case 'response.audio.delta':
+                    if (messageData.delta) {
+                        try {
+                            const audioData = atob(messageData.delta);
+                            const arrayBuffer = new ArrayBuffer(audioData.length);
+                            const uint8Array = new Uint8Array(arrayBuffer);
+                            for (let i = 0; i < audioData.length; i++) { uint8Array[i] = audioData.charCodeAt(i); }
+                            audioBufferRef.current.push(arrayBuffer);
+                        } catch (error) { console.error('Error processing audio delta:', error); }
+                    }
+                    break;
+                case 'response.audio_transcript.done':
+                     if (messageData.transcript) {
+                        const responseId = currentAiResponseIdRef.current || `ai-${Date.now()}`;
+                        addMessageToChat(responseId, 'avatar', messageData.transcript, false);
+                        currentAiResponseIdRef.current = null;
+                    }
+                    break;
+                case 'response.audio.done':
+                    if (audioBufferRef.current.length > 0) {
+                        await playAccumulatedAudio();
+                    }
+                    break;
+                case 'response.done':
+                    if (isSessionActive && !isRecording) {
+                         setCurrentText('🎤 탭하여 말하기');
+                    }
+                    break;
+                case 'error':
+                    console.error('Error from proxy/Minimax:', messageData);
+                    setConnectionError(`오류: ${messageData.message || '알 수 없는 오류'}`);
+                    break;
+                case 'session.created':
+                case 'connection_status':
+                     // Informational, no action needed now.
+                    break;
+                default:
+                    console.log('Unknown message type:', messageData.type, messageData);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            setConnectionError('WebSocket 연결 오류가 발생했습니다.');
+            endSession();
+        };
+    
+        ws.onclose = () => {
+            console.log('WebSocket disconnected.');
+            endSession();
+        };
+
+    } catch (err) {
+        console.error("Session initialization failed:", err);
+        setConnectionError("세션 시작에 실패했습니다.");
+        await endSession();
+    }
+  }, [isSessionActive, endSession]);
+
+
+  // --- MAIN BUTTON HANDLER ---
+  const handleMainButtonClick = useCallback(async () => {
+    if (!isSessionActive) {
+      await startSession();
+    } else {
+      if (isRecording) {
+        await stopRecordingTurn();
+      } else if (!isAiSpeaking) { // Prevent user from interrupting AI
+        await startRecordingTurn();
+      }
+    }
+  }, [isSessionActive, isRecording, isAiSpeaking, startSession, stopRecordingTurn, startRecordingTurn]);
+
+
+  useEffect(() => {
+    // ComponentWillUnmount
+    return () => {
+        endSession();
+    };
+  }, [endSession]);
+
   const addMessageToChat = (id: string, type: 'user' | 'avatar', text: string, isDelta: boolean = false) => {
     setMessages(prevMessages => {
+      const existingMessageIndex = prevMessages.findIndex(msg => msg.id === id);
       if (isDelta) {
-        const existingMessageIndex = prevMessages.findIndex(msg => msg.id === id);
         if (existingMessageIndex > -1) {
           const updatedMessages = [...prevMessages];
-          updatedMessages[existingMessageIndex] = {
-            ...updatedMessages[existingMessageIndex],
-            text: updatedMessages[existingMessageIndex].text + text,
-            timestamp: new Date(),
-          };
+          updatedMessages[existingMessageIndex].text += text;
           return updatedMessages;
+        } else {
+           return [...prevMessages, { id, type, text, timestamp: new Date() }];
         }
-      }
-      const existingMessage = prevMessages.find(msg => msg.id === id);
-      if (existingMessage && !isDelta) {
-        return prevMessages.map(msg => 
-          msg.id === id ? { ...msg, text, timestamp: new Date() } : msg
-        );
+      } else {
+        if (existingMessageIndex > -1) {
+          return prevMessages.map(msg => msg.id === id ? { ...msg, text, timestamp: new Date() } : msg);
+        }
       }
       return [...prevMessages, { id, type, text, timestamp: new Date() }];
     });
@@ -74,72 +309,38 @@ const RealtimeChat: React.FC = () => {
 
   const playAudioResponse = async (base64Audio: string) => {
     try {
-      // 创建音频元素并播放
-      const audio = new Audio(`data:audio/pcm;base64,${base64Audio}`);
-      
-      audio.onplay = () => {
-        setIsSpeaking(true);
+      const audioData = atob(base64Audio);
+      const arrayBuffer = new ArrayBuffer(audioData.length);
+      const uint8Array = new Uint8Array(arrayBuffer);
+      for (let i = 0; i < audioData.length; i++) { uint8Array[i] = audioData.charCodeAt(i); }
+
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      const pcm16Data = new Int16Array(arrayBuffer);
+      const audioBuffer = audioContext.createBuffer(1, pcm16Data.length, 24000);
+      const channelData = audioBuffer.getChannelData(0);
+      for (let i = 0; i < pcm16Data.length; i++) { channelData[i] = pcm16Data[i] / 32768.0; }
+
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+      source.onended = () => {
+        setIsAiSpeaking(false);
+        if(isSessionActive) setCurrentText('🎤 탭하여 말하기');
       };
-      
-      audio.onended = () => {
-        setIsSpeaking(false);
-        setCurrentText('원을 터치하여 시작');
-      };
-      
-      audio.onerror = (e) => {
-        console.error('Audio playback error:', e);
-        setIsSpeaking(false);
-        
-        // 尝试使用 Web Audio API 播放 PCM 数据
-        try {
-          const audioData = atob(base64Audio);
-          const arrayBuffer = new ArrayBuffer(audioData.length);
-          const uint8Array = new Uint8Array(arrayBuffer);
-          
-          for (let i = 0; i < audioData.length; i++) {
-            uint8Array[i] = audioData.charCodeAt(i);
-          }
-          
-          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-            sampleRate: 24000
-          });
-          
-          const pcm16Data = new Int16Array(arrayBuffer);
-          const audioBuffer = audioContext.createBuffer(1, pcm16Data.length, 24000);
-          const channelData = audioBuffer.getChannelData(0);
-          
-          for (let i = 0; i < pcm16Data.length; i++) {
-            channelData[i] = pcm16Data[i] / 32768.0;
-          }
-          
-          const source = audioContext.createBufferSource();
-          source.buffer = audioBuffer;
-          source.connect(audioContext.destination);
-          source.onended = () => {
-            setIsSpeaking(false);
-            setCurrentText('원을 터치하여 시작');
-          };
-          source.start();
-          setIsSpeaking(true);
-        } catch (fallbackError) {
-          console.error('Web Audio API fallback also failed:', fallbackError);
-          setConnectionError('음성 재생에 실패했습니다.');
-        }
-      };
-      
-      await audio.play();
+      source.start();
     } catch (error) {
-      console.error('Error playing audio:', error);
+      console.error('Audio playback error:', error);
+      setIsAiSpeaking(false);
       setConnectionError('AI 오디오 재생에 실패했습니다.');
-      setIsSpeaking(false);
     }
   };
 
   const playAccumulatedAudio = async () => {
     try {
-      console.log('Starting to play accumulated audio, buffer count:', audioBufferRef.current.length);
-      
-      // 合并所有音频缓冲区
+      if (audioBufferRef.current.length === 0) return;
+      setIsAiSpeaking(true);
+      setCurrentText('AI가 말하는 중...');
+
       const totalLength = audioBufferRef.current.reduce((sum, buffer) => sum + buffer.byteLength, 0);
       const combinedBuffer = new ArrayBuffer(totalLength);
       const combinedUint8 = new Uint8Array(combinedBuffer);
@@ -149,297 +350,29 @@ const RealtimeChat: React.FC = () => {
         combinedUint8.set(new Uint8Array(buffer), offset);
         offset += buffer.byteLength;
       }
-      
-      // 清空缓冲区
       audioBufferRef.current = [];
       
-      // 使用 Web Audio API 播放 PCM 数据
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-        sampleRate: 24000
-      });
-      
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const pcm16Data = new Int16Array(combinedBuffer);
       const audioBuffer = audioContext.createBuffer(1, pcm16Data.length, 24000);
       const channelData = audioBuffer.getChannelData(0);
       
-      for (let i = 0; i < pcm16Data.length; i++) {
-        channelData[i] = pcm16Data[i] / 32768.0;
-      }
+      for (let i = 0; i < pcm16Data.length; i++) { channelData[i] = pcm16Data[i] / 32768.0; }
       
       const source = audioContext.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioContext.destination);
       
       source.onended = () => {
-        console.log('Audio playback finished');
-        setIsSpeaking(false);
-        setCurrentText('원을 터치하여 시작');
+        setIsAiSpeaking(false);
+        if(isSessionActive) setCurrentText('🎤 탭하여 말하기');
       };
-      
-      setIsSpeaking(true);
       source.start();
       
     } catch (error) {
       console.error('Error playing accumulated audio:', error);
       setConnectionError('音频播放失败');
-      setIsSpeaking(false);
-    }
-  };
-
-  const stopRecording = () => {
-    setIsRecording(false);
-    setIsConnected(false);
-    setMinimaxConnected(false);
-    
-    // 停止录音器
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-    
-    // 关闭WebSocket连接
-    if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
-      webSocketRef.current.close(1000, 'User stopped recording');
-    }
-    
-    // 清空音频缓冲区
-    audioBufferRef.current = [];
-    
-    setCurrentText('원을 터치하여 시작');
-    setConnectionError(null);
-  };
-
-  const handleMainButtonClick = async () => {
-    if (isRecording) {
-      // Stop recording
-      stopRecording();
-      return;
-    } else {
-      // Start new recording session
-      setIsRecording(true);
-      setConnectionError(null);
-      setCurrentText('Node.js 프록시 연결 중...');
-      currentAiResponseIdRef.current = null;
-      setIsConnected(false);
-      setMinimaxConnected(false);
-
-      const clientId = `user-${Date.now()}`;
-      const wsUrl = `ws://localhost:3003/ws/realtime-chat?client_id=${clientId}`;
-      console.log('Attempting to connect to WebSocket:', wsUrl);
-      
-      const ws = new WebSocket(wsUrl);
-      webSocketRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('WebSocket connected to Node.js proxy');
-        setIsConnected(true);
-      };
-
-      ws.onmessage = async (event) => {
-        let messageData;
-        try {
-          messageData = JSON.parse(event.data as string);
-        } catch (e) {
-          console.error('Failed to parse WebSocket message:', event.data, e);
-          setConnectionError('잘못된 형식의 메시지를 받았습니다.');
-          return;
-        }
-        
-        console.log('Received from Node.js proxy:', messageData);
-
-        switch (messageData.type) {
-          case 'connection_status':
-            if (messageData.connected) {
-              setMinimaxConnected(true);
-              setCurrentText('Minimax 연결됨. 말씀하세요...'); // Default message
-              // If minimax_session_initiated is true, Minimax is likely ready or will be soon
-              if (messageData.minimax_session_initiated) {
-                setCurrentText('Minimax 세션 준비됨. 말씀하세요...');
-              }
-              
-              try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const recorderOptions: MediaRecorderOptions = {};
-                
-                if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-                  recorderOptions.mimeType = 'audio/webm;codecs=opus';
-                } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-                  recorderOptions.mimeType = 'audio/webm';
-                }
-                
-                const recorder = new MediaRecorder(stream, recorderOptions);
-                mediaRecorderRef.current = recorder;
-
-                recorder.ondataavailable = (event) => {
-                  if (event.data.size > 0 && webSocketRef.current?.readyState === WebSocket.OPEN) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      const base64Audio = reader.result as string;
-                      webSocketRef.current?.send(JSON.stringify({
-                        type: 'input_audio_buffer.append',
-                        audio: base64Audio.split(',')[1]
-                      }));
-                    };
-                    reader.readAsDataURL(event.data);
-                  }
-                };
-
-                recorder.onstop = () => {
-                  if (webSocketRef.current?.readyState === WebSocket.OPEN) {
-                    webSocketRef.current?.send(JSON.stringify({ 
-                      type: 'input_audio_buffer.commit' 
-                    }));
-                  }
-                  stream.getTracks().forEach(track => track.stop());
-                };
-                
-                recorder.start(100);
-              } catch (err) {
-                console.error('Error accessing microphone:', err);
-                setConnectionError('마이크 접근 또는 녹음 시작에 실패했습니다.');
-                setIsRecording(false);
-                setCurrentText('마이크 오류');
-              }
-            } else {
-              setCurrentText('Minimax 연결 실패');
-              setConnectionError(messageData.message || 'Minimax 연결에 실패했습니다.');
-              setIsRecording(false);
-              if (ws.readyState === WebSocket.OPEN) ws.close();
-            }
-            break;
-
-          case 'session.created': // Handle session.created from Minimax (via proxy)
-            console.log('Session created with Minimax:', messageData.session);
-            setCurrentText('Minimax 세션 생성됨. 준비 중...');
-            // Further actions can be triggered here if needed, e.g., enabling UI elements
-            break;
-
-          case 'response.audio_transcript.delta':
-            if (messageData.delta) {
-              if (!currentAiResponseIdRef.current) {
-                currentAiResponseIdRef.current = `ai-${Date.now()}`;
-              }
-              addMessageToChat(currentAiResponseIdRef.current, 'avatar', messageData.delta, true);
-            }
-            break;
-
-          case 'response.audio.delta':
-            // 音频数据累积
-            if (messageData.delta) {
-              console.log('Received audio delta');
-              try {
-                const audioData = atob(messageData.delta);
-                const arrayBuffer = new ArrayBuffer(audioData.length);
-                const uint8Array = new Uint8Array(arrayBuffer);
-                
-                for (let i = 0; i < audioData.length; i++) {
-                  uint8Array[i] = audioData.charCodeAt(i);
-                }
-                
-                audioBufferRef.current.push(arrayBuffer);
-              } catch (error) {
-                console.error('Error processing audio delta:', error);
-              }
-            }
-            break;
-
-          case 'response.text.delta':
-            if (messageData.delta) {
-              if (!currentAiResponseIdRef.current) {
-                currentAiResponseIdRef.current = `ai-${Date.now()}`;
-              }
-              addMessageToChat(currentAiResponseIdRef.current, 'avatar', messageData.delta, true);
-            }
-            break;
-
-          case 'response.text.done':
-            if (messageData.text) {
-              const responseId = currentAiResponseIdRef.current || `ai-${Date.now()}`;
-              addMessageToChat(responseId, 'avatar', messageData.text, false);
-            }
-            setCurrentText('원을 터치하여 시작');
-            break;
-
-          case 'response.audio_transcript.done':
-            if (messageData.transcript) {
-              const responseId = currentAiResponseIdRef.current || `ai-${Date.now()}`;
-              addMessageToChat(responseId, 'avatar', messageData.transcript, false);
-            }
-            break;
-
-          case 'response.audio.done':
-            // 播放累积的音频数据
-            if (audioBufferRef.current.length > 0) {
-              console.log('Playing accumulated audio data');
-              await playAccumulatedAudio();
-            }
-            break;
-
-          case 'response.created':
-            console.log('Response created:', messageData.response);
-            setCurrentText('AI 응답 생성 중...');
-            break;
-
-          case 'response.output_item.added':
-            console.log('Output item added:', messageData.item);
-            break;
-
-          case 'response.output_item.done':
-            console.log('Output item done:', messageData.item);
-            break;
-
-          case 'response.done':
-            console.log('Response complete:', messageData);
-            if (messageData.response && messageData.response.output) {
-              const output = messageData.response.output[0];
-              if (output) {
-                if (output.type === 'message' && output.content) {
-                  // 텍스트 응답 처리
-                  const textContent = output.content.find((c: any) => c.type === 'text');
-                  if (textContent && textContent.text) {
-                    const responseId = currentAiResponseIdRef.current || `ai-${Date.now()}`;
-                    addMessageToChat(responseId, 'avatar', textContent.text, false);
-                  }
-                  
-                  // 오디오 응답 처리
-                  const audioContent = output.content.find((c: any) => c.type === 'audio');
-                  if (audioContent && audioContent.audio) {
-                    await playAudioResponse(audioContent.audio);
-                  }
-                }
-              }
-            }
-            setCurrentText('원을 터치하여 시작');
-            break;
-
-          case 'error':
-            console.error('Error from proxy/Minimax:', messageData);
-            setConnectionError(`오류: ${messageData.message || messageData.error || '알 수 없는 오류가 발생했습니다.'}`);
-            setCurrentText('오류 발생');
-            setIsRecording(false);
-            if (ws.readyState === WebSocket.OPEN) ws.close();
-            break;
-
-          default:
-            console.log('Unknown message type:', messageData.type);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setConnectionError('WebSocket 연결 오류가 발생했습니다.');
-        setIsRecording(false);
-        setIsConnected(false);
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        setIsConnected(false);
-        setMinimaxConnected(false);
-        if (isRecording) {
-          setIsRecording(false);
-          setCurrentText('연결이 끊어졌습니다');
-        }
-      };
+      setIsAiSpeaking(false);
     }
   };
 
@@ -504,20 +437,17 @@ const RealtimeChat: React.FC = () => {
             
             <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg
               ${isRecording ? 'bg-red-500/90 backdrop-blur-sm' :
-                minimaxConnected ? 'bg-green-500/80 backdrop-blur-sm' :
                 'bg-white/40 backdrop-blur-sm group-hover:bg-white/50'
               }
             `}>
               {isRecording ? (
                 <Square className="w-8 h-8 text-white" />
-              ) : minimaxConnected ? (
-                <Mic className="w-8 h-8 text-white" />
               ) : (
                 <Play className="w-8 h-8 text-gray-700 group-hover:text-gray-800" />
               )}
             </div>
             
-            {isConnected && (
+            {isSessionActive && (
               <>
                 <div className="absolute inset-4 rounded-full border-2 border-white/30 animate-ping"></div>
                 <div className="absolute inset-8 rounded-full border border-white/20 animate-pulse"></div>
@@ -530,12 +460,10 @@ const RealtimeChat: React.FC = () => {
       {/* 중앙 상태 표시기 */}
       <div className="absolute top-80 left-1/2 transform -translate-x-1/2 z-10">
         <div className={`w-3 h-3 rounded-full ${
-          isConnected && minimaxConnected ? 'bg-green-500' : 
-          isConnected ? 'bg-yellow-500' : 'bg-gray-400'
+          isSessionActive ? 'bg-green-500' : 'bg-gray-400'
         } mx-auto mb-2`}></div>
         <div className="text-center text-gray-600 text-sm font-medium">
-          {isConnected && minimaxConnected ? '대화 중' : 
-           isConnected ? 'MiniMax 연결 중' : '원을 터치하여 시작'}
+          {isSessionActive ? '대화 중' : '원을 터치하여 시작'}
         </div>
       </div>
 
@@ -556,7 +484,7 @@ const RealtimeChat: React.FC = () => {
             <p className="text-gray-800 text-center leading-relaxed">{currentText}</p>
           )}
         </div>
-        {isSpeaking && (
+        {isAiSpeaking && (
           <div className="flex justify-center mt-2">
             <div className="flex space-x-1">
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
@@ -662,7 +590,7 @@ const RealtimeChat: React.FC = () => {
                 </div>
               )}
               
-              {isSpeaking && (
+              {isAiSpeaking && (
                 <div className="flex justify-start">
                   <div className="bg-blue-50 border border-blue-200 px-4 py-3 rounded-2xl max-w-[85%] shadow-sm">
                     <div className="flex items-center space-x-3">
@@ -687,11 +615,9 @@ const RealtimeChat: React.FC = () => {
                   <span>메시지: {messages.length}개</span>
                   <span className="flex items-center">
                     <div className={`w-2 h-2 rounded-full mr-1 ${
-                      isConnected && minimaxConnected ? 'bg-green-500' : 
-                      isConnected ? 'bg-yellow-500' : 'bg-gray-400'
+                      isSessionActive ? 'bg-green-500' : 'bg-gray-400'
                     }`}></div>
-                    {isConnected && minimaxConnected ? '연결됨' : 
-                     isConnected ? '연결 중' : '연결 끊김'}
+                    {isSessionActive ? '연결됨' : '연결 끊김'}
                   </span>
                 </div>
               </div>

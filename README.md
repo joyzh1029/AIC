@@ -94,6 +94,40 @@ cd TTS
 python -m uvicorn tts:app --host 0.0.0.0 --port 8181 --reload
 ```
 
+### 3-1. todoist MCP 서버 실행 방법
+```bash
+# 1. 의존성 설치
+cd node-mcp-servers/todoist
+npm install
+
+# 2. 환경 변수 설정 (필수)
+# .env 파일에 아래와 같이 Todoist API 토큰을 추가
+echo "TODOIST_API_TOKEN=여기에_본인_TODOIST_API_토큰" > .env
+
+# 3. 서버 실행
+node todoist-mcp-node-server.js
+
+# HTTP 인터페이스: http://localhost:8000
+# MCP stdio 인터페이스도 동시에 활성화됨
+```
+
+### 3-2. 실시간(Realtime) 프록시 서버 실행 방법
+```bash
+# 1. 의존성 설치
+cd node-mcp-servers/minimax-realtime
+npm install
+
+# 2. 환경 변수 설정 (필수)
+# .env 파일에 아래와 같이 MiniMax API 키를 추가
+echo "MINIMAX_API_KEY=여기에_본인_API_키" > .env
+
+# 3. 서버 실행
+npm run start
+
+# WebSocket 엔드포인트: ws://localhost:3003/ws/realtime-chat
+# 상태 확인: http://localhost:3003/health
+```
+
 ### 4. 프론트엔드 설정 및 실행
 ```bash
 cd frontend

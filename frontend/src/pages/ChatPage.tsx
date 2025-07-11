@@ -1584,7 +1584,7 @@ const ChatInterface = () => {
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder={isRecording ? "录音完成后将自动转换为文字..." : "메시지를 입력하세요..."}
+                placeholder={isRecording ? "녹음이 끝나면 자동으로 문자로 변환합니다..." : "메시지를 입력하세요..."}
                 className="flex-1 px-4 py-2 bg-transparent focus:outline-none text-sm"
                 disabled={isRecording}
                 onKeyDown={(e) => {

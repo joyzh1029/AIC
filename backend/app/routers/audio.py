@@ -8,13 +8,14 @@ from app.nlp.llm import generate_response
 from funasr import AutoModel
 import torch
 from app.emotion.ser_emotion import analyze_voice_emotion_korean
+from app.core.data_generator import generate_environment_context
 
 # 로거 설정
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
 
-# 加载Whisper模型
+# Whisper 모델 로딩
 try:
     whisper_model = load_whisper_model()
     logger.info("Whisper 모델 로딩 완료")
@@ -37,12 +38,12 @@ model = AutoModel(
 )
 
 def analyze_voice_emotion(audio_path: str) -> str:
-    """分析语音情感，调用真实模型"""
+    """음성 감정 분석, 실제 모델 호출"""
     return analyze_voice_emotion_korean(audio_path)
 
 @router.post("/transcribe")
 async def transcribe_voice(audio: UploadFile = File(...)):
-    """将语音文件转换为文字并生成回复"""
+    """음성 파일을 텍스트로 변환하고 응답 생성"""
     if not whisper_model:
         raise HTTPException(
             status_code=500,
@@ -50,7 +51,7 @@ async def transcribe_voice(audio: UploadFile = File(...)):
         )
 
     try:
-        # 检查文件大小
+        # 파일 크기 확인
         file_size = 0
         while chunk := await audio.read(8192):
             file_size += len(chunk)
@@ -60,7 +61,7 @@ async def transcribe_voice(audio: UploadFile = File(...)):
         if file_size > 10 * 1024 * 1024:  # 10MB
             raise HTTPException(status_code=400, detail="파일이 너무 큽니다")
 
-        # 保存上传的音频文件
+        # 업로드된 오디오 파일 저장
         content = await audio.read()
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="빈 오디오 파일입니다")
@@ -70,18 +71,18 @@ async def transcribe_voice(audio: UploadFile = File(...)):
             temp_webm_path = temp_webm.name
             logger.info(f"임시 WebM 파일 저장됨: {temp_webm_path}")
 
-        # 转换为WAV格式
+        # WAV 형식으로 변환
         temp_wav_path = temp_webm_path.replace(".webm", ".wav")
         convert_webm_to_wav(temp_webm_path, temp_wav_path)
         logger.info(f"오디오 변환 완료: {temp_wav_path}")
 
-        # 语音转文字
+        # 음성을 텍스트로 변환
         text = transcribe_audio(whisper_model, temp_wav_path)
         if not text:
             raise HTTPException(status_code=400, detail="음성 인식 결과가 없습니다")
         logger.info(f"음성 인식 결과: {text}")
 
-        # 分析语音情感
+        # 음성 감정 분석
         try:
             voice_emotion = analyze_voice_emotion(temp_wav_path)
         except Exception as e:
@@ -89,22 +90,20 @@ async def transcribe_voice(audio: UploadFile = File(...)):
             voice_emotion = "unknown"
         logger.info(f"음성 감정 분석 결과: {voice_emotion}")
 
-        # 生成LLM回复
-        context = {
-            "weather": "晴朗",  # 这里可以接入实际的天气API
-            "sleep": "充足",    # 这里可以接入实际的睡眠数据
-            "stress": "正常",   # 这里可以接入实际的压力数据
-            "emotion_history": ["平静", "开心"]  # 这里可以接入实际的情感历史数据
-        }
+        # 환경 컨텍스트 데이터 생성 (실제 감지된 음성 감정 사용)
+        context_data = generate_environment_context(voice_emotion=voice_emotion)
+        context_data["location_scene"] = "음성 대화 장면"  # 장면 정보 추가
+
+        logger.info(f"생성된 환경 데이터: {context_data}")
 
         llm_response = await generate_response(
             emotion=voice_emotion,  # 음성 감정을 emotion으로 사용
             user_text=text,
-            context=context,
+            context=context_data,
             ai_mbti_persona=None  # 기본 페르소나 사용
         )
 
-        # 清理临时文件
+        # 임시 파일 정리
         try:
             os.unlink(temp_webm_path)
             os.unlink(temp_wav_path)
@@ -116,7 +115,7 @@ async def transcribe_voice(audio: UploadFile = File(...)):
             "text": text,
             "voice_emotion": voice_emotion,
             "response": llm_response,
-            "is_search_query": False  # 可以添加查询检测逻辑
+            "is_search_query": False  # 쿼리 감지 로직 추가 가능
         })
 
     except HTTPException as he:
@@ -129,7 +128,7 @@ async def transcribe_voice(audio: UploadFile = File(...)):
         }, status_code=500)
 
 def convert_webm_to_wav(input_path: str, output_path: str):
-    """将WebM音频转换为WAV格式"""
+    """WebM 오디오를 WAV 형식으로 변환"""
     try:
         import subprocess
         command = [

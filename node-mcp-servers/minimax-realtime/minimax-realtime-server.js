@@ -25,6 +25,9 @@ const clientConnections = new Map();
 // Audio buffer for accumulating audio chunks
 const audioBuffers = new Map();
 
+// User audio input buffers for each client
+const userAudioBuffers = new Map();
+
 wss.on('connection', (clientWs, req) => {
     console.log('Frontend client connected successfully');
     
@@ -37,6 +40,7 @@ wss.on('connection', (clientWs, req) => {
 
     // Initialize audio buffer for this client
     audioBuffers.set(clientWs, []);
+    userAudioBuffers.set(clientWs, []);
 
     // Store connection mapping
     clientConnections.set(clientWs, minimaxWs);
@@ -50,48 +54,23 @@ wss.on('connection', (clientWs, req) => {
             type: messageTypes.SESSION_UPDATE,
             session: {
                 modalities: ["text", "audio"],
-                instructions: "You are a helpful AI assistant. Please respond naturally to user requests.",
-                voice: "Korean_WiseElf",
+                instructions: "You are a helpful AI assistant. Please respond naturally to user requests in Korean.",
+                voice: "Korean_SweetGirl",
                 output_audio_format: "pcm16",
                 temperature: 0.8,
                 max_output_tokens: 4096
             }
         }));
         
-        // Use setTimeout as suggested by user to sequence context creation and response request
-        setTimeout(() => {
-            // 2. Add user message to provide context
-            minimaxWs.send(JSON.stringify({
-                type: messageTypes.CONVERSATION_ITEM_CREATE,
-                item: {
-                    type: "message",
-                    role: "user",
-                    content: [{
-                        type: "input_text",
-                        text: "안녕하세요! 자기소개를 한국어로 해주세요."
-                    }],
-                    status: "completed"
-                }
+        // Forward connection status to frontend once setup is initiated
+        if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify({
+                type: 'connection_status',
+                connected: true, 
+                minimax_session_initiated: true, 
+                message: 'MiniMax session setup initiated. Ready for voice input.'
             }));
-            
-            // 3. Create response (request AI to speak)
-            minimaxWs.send(JSON.stringify({
-                type: messageTypes.RESPONSE_CREATE
-            }));
-
-            console.log('Context and response request sent to MiniMax.');
-
-            // Forward connection status to frontend once setup is initiated
-            // The actual 'ready' state might depend on Minimax's response (e.g., session.created)
-            if (clientWs.readyState === WebSocket.OPEN) {
-                clientWs.send(JSON.stringify({
-                    type: 'connection_status',
-                    connected: true, 
-                    minimax_session_initiated: true, 
-                    message: 'MiniMax session setup initiated.'
-                }));
-            }
-        }, 100); 
+        }
     });
 
     minimaxWs.on('message', (data) => {
@@ -282,8 +261,9 @@ wss.on('connection', (clientWs, req) => {
                 message: `Connection closed: ${reason || 'Unknown reason'}`
             }));
         }
-        // Clean up audio buffer
+        // Clean up audio buffers
         audioBuffers.delete(clientWs);
+        userAudioBuffers.delete(clientWs);
     });
 
     // Frontend client message handling
@@ -295,21 +275,47 @@ wss.on('connection', (clientWs, req) => {
             // Handle different message types from frontend
             switch (message.type) {
                 case messageTypes.INPUT_AUDIO_BUFFER_APPEND:
-                    // Forward audio append to MiniMax
-                    if (minimaxWs.readyState === WebSocket.OPEN) {
-                        minimaxWs.send(JSON.stringify({
-                            type: message.type,
-                            audio: message.audio
-                        }));
+                    // Accumulate user audio data
+                    if (message.audio) {
+                        const userBuffer = userAudioBuffers.get(clientWs) || [];
+                        userBuffer.push(message.audio);
+                        userAudioBuffers.set(clientWs, userBuffer);
+                        console.log('Accumulated user audio chunk, total chunks:', userBuffer.length);
                     }
                     break;
 
                 case messageTypes.INPUT_AUDIO_BUFFER_COMMIT:
-                    // Forward audio commit to MiniMax
-                    if (minimaxWs.readyState === WebSocket.OPEN) {
+                    // Process accumulated user audio and send to MiniMax
+                    const userBuffer = userAudioBuffers.get(clientWs) || [];
+                    if (userBuffer.length > 0 && minimaxWs.readyState === WebSocket.OPEN) {
+                        console.log('Processing user audio input, chunks:', userBuffer.length);
+                        
+                        // Combine all audio chunks
+                        const combinedAudio = userBuffer.join('');
+                        
+                        // Send user audio to MiniMax
                         minimaxWs.send(JSON.stringify({
-                            type: message.type
+                            type: messageTypes.CONVERSATION_ITEM_CREATE,
+                            item: {
+                                type: "message",
+                                role: "user",
+                                content: [{
+                                    type: "input_audio",
+                                    audio: combinedAudio
+                                }],
+                                status: "completed"
+                            }
                         }));
+                        
+                        // Request AI response
+                        setTimeout(() => {
+                            minimaxWs.send(JSON.stringify({
+                                type: messageTypes.RESPONSE_CREATE
+                            }));
+                        }, 100);
+                        
+                        // Clear user audio buffer
+                        userAudioBuffers.set(clientWs, []);
                     }
                     break;
 
@@ -373,9 +379,10 @@ wss.on('connection', (clientWs, req) => {
             minimaxWs.close();
         }
         
-        // Clean up connection mapping and audio buffer
+        // Clean up connection mapping and audio buffers
         clientConnections.delete(clientWs);
         audioBuffers.delete(clientWs);
+        userAudioBuffers.delete(clientWs);
     });
 
     clientWs.on('error', (error) => {
@@ -420,6 +427,7 @@ process.on('SIGTERM', () => {
     
     // Clear audio buffers
     audioBuffers.clear();
+    userAudioBuffers.clear();
     
     server.close(() => {
         console.log('Server closed');
